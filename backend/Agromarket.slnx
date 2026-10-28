@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Agromarket.Api/Agromarket.Api.csproj" />
+  <Project Path="Agromarket.Application/Agromarket.Application.csproj" />
+  <Project Path="Agromarket.Domain/Agromarket.Domain.csproj" />
+  <Project Path="Agromarket.Infrastructure/Agromarket.Infrastructure.csproj" />
+</Solution>

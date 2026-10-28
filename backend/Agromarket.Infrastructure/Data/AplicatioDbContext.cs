@@ -1,0 +1,159 @@
+using Agromarket.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace Agromarket.Infrastructure.Data;
+
+public class ApplicationDbContext : DbContext
+{
+    public ApplicationDbContext(
+        DbContextOptions<ApplicationDbContext> options)
+        : base(options)
+    {
+    }
+
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Role> Roles => Set<Role>();
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+    public DbSet<Publication> Publications => Set<Publication>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+
+        // USER
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Email)
+                .IsRequired()
+                .HasMaxLength(255);
+
+            entity.HasIndex(x => x.Email)
+                .IsUnique();
+
+            entity.Property(x => x.PasswordHash)
+                .IsRequired();
+
+            entity.HasOne(x => x.Role)
+                .WithMany(x => x.Users)
+                .HasForeignKey(x => x.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Profile)
+                .WithOne(x => x.User)
+                .HasForeignKey<UserProfile>(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ROLE
+      
+
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.HasIndex(x => x.Name)
+                .IsUnique();
+        });
+
+    
+        // USER PROFILE
+
+
+        modelBuilder.Entity<UserProfile>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.FirstName)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.LastName)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Phone)
+                .HasMaxLength(30);
+
+            entity.Property(x => x.CompanyName)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.Address)
+                .HasMaxLength(300);
+        });
+
+        // PUBLICATION
+
+        modelBuilder.Entity<Publication>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Title)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Description)
+                .IsRequired()
+                .HasMaxLength(2000);
+
+            entity.Property(x => x.Price)
+                .HasPrecision(12, 2);
+
+            entity.Property(x => x.Unit)
+                .IsRequired()
+                .HasMaxLength(30);
+
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.Publications)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        
+        // DATOS INICIALES - ROLES
+        
+
+        var compradorRoleId =
+            Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        var proveedorRoleId =
+            Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+        var administradorRoleId =
+            Guid.Parse("33333333-3333-3333-3333-333333333333");
+
+        modelBuilder.Entity<Role>().HasData(
+            new Role
+            {
+                Id = compradorRoleId,
+                Name = "Comprador",
+                CreatedAt = new DateTime(
+                    2026, 9, 30, 0, 0, 0,
+                    DateTimeKind.Utc)
+            },
+            new Role
+            {
+                Id = proveedorRoleId,
+                Name = "Proveedor",
+                CreatedAt = new DateTime(
+                    2026, 9, 30, 0, 0, 0,
+                    DateTimeKind.Utc)
+            },
+            new Role
+            {
+                Id = administradorRoleId,
+                Name = "Administrador",
+                CreatedAt = new DateTime(
+                    2026, 9, 30, 0, 0, 0,
+                    DateTimeKind.Utc)
+            }
+        );
+    }
+}
