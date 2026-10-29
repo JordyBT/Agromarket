@@ -1,129 +1,157 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
-  BadgeCheck,
   Boxes,
   CalendarDays,
-  Heart,
+  CircleAlert,
+  Leaf,
   MapPin,
-  MessageSquareText,
   PackageCheck,
   ShieldCheck,
   Sprout,
   Store,
   Truck,
   Wheat,
-  Leaf,
 } from "lucide-react";
+import {
+  getPublicationById,
+  type Publication,
+} from "@/services/publicationService";
 
-const products = [
-  {
-    id: "1",
-    name: "Maíz amarillo",
-    category: "Granos",
-    location: "Zacapa, Guatemala",
-    price: "Q 185.00",
-    unit: "quintal",
-    available: "240 qq",
-    minimum: "10 quintales",
-    supplier: "Agrícola Los Pinos",
-    supplierInitials: "AP",
-    description:
-      "Maíz amarillo seco disponible para venta mayorista. Producto almacenado bajo condiciones controladas y listo para despacho según cantidad acordada.",
-    icon: Wheat,
-  },
-  {
-    id: "2",
-    name: "Frijol negro",
-    category: "Granos",
-    location: "Chiquimula, Guatemala",
-    price: "Q 465.00",
-    unit: "quintal",
-    available: "85 qq",
-    minimum: "5 quintales",
-    supplier: "Productores del Oriente",
-    supplierInitials: "PO",
-    description:
-      "Frijol negro seleccionado para comercialización mayorista. Disponible para compradores, distribuidores y empresas del sector alimentario.",
-    icon: Leaf,
-  },
-  {
-    id: "3",
-    name: "Tomate manzano",
-    category: "Hortalizas",
-    location: "Jalapa, Guatemala",
-    price: "Q 145.00",
-    unit: "caja",
-    available: "160 cajas",
-    minimum: "10 cajas",
-    supplier: "Finca El Encanto",
-    supplierInitials: "FE",
-    description:
-      "Tomate manzano fresco producido para distribución comercial. El inventario se actualiza según disponibilidad de cosecha.",
-    icon: Sprout,
-  },
-  {
-    id: "4",
-    name: "Café pergamino",
-    category: "Café",
-    location: "Chiquimula, Guatemala",
-    price: "Q 1,250.00",
-    unit: "quintal",
-    available: "40 qq",
-    minimum: "2 quintales",
-    supplier: "Café Sierra Verde",
-    supplierInitials: "CV",
-    description:
-      "Café pergamino seco disponible para negociación mayorista. Producto orientado a compradores y empresas del sector cafetalero.",
-    icon: Leaf,
-  },
-  {
-    id: "5",
-    name: "Cebolla blanca",
-    category: "Hortalizas",
-    location: "Jutiapa, Guatemala",
-    price: "Q 120.00",
-    unit: "quintal",
-    available: "110 qq",
-    minimum: "10 quintales",
-    supplier: "Agroservicios del Sur",
-    supplierInitials: "AS",
-    description:
-      "Cebolla blanca disponible para distribución comercial. Venta por volumen con cantidades sujetas a disponibilidad.",
-    icon: Sprout,
-  },
-  {
-    id: "6",
-    name: "Arroz en granza",
-    category: "Granos",
-    location: "Izabal, Guatemala",
-    price: "Q 210.00",
-    unit: "quintal",
-    available: "320 qq",
-    minimum: "15 quintales",
-    supplier: "Distribuidora del Caribe",
-    supplierInitials: "DC",
-    description:
-      "Arroz en granza destinado a operaciones comerciales de volumen. Disponible para compradores mayoristas y procesadores.",
-    icon: Wheat,
-  },
-];
+function getIcon(category: string): LucideIcon {
+  const value = category.toLowerCase();
 
-type ProductPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+  if (
+    value.includes("grano") ||
+    value.includes("cereal")
+  ) {
+    return Wheat;
+  }
 
-export default async function ProductPage({
-  params,
-}: ProductPageProps) {
-  const { id } = await params;
+  if (
+    value.includes("hortaliza") ||
+    value.includes("vegetal")
+  ) {
+    return Sprout;
+  }
 
-  const product =
-    products.find((item) => item.id === id) ?? products[0];
+  return Leaf;
+}
 
-  const Icon = product.icon;
+function formatPrice(price: number) {
+  return new Intl.NumberFormat("es-GT", {
+    style: "currency",
+    currency: "GTQ",
+    minimumFractionDigits: 2,
+  }).format(price);
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("es-GT", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+export default function ProductPage() {
+  const params = useParams();
+
+  const publicationId =
+    typeof params.id === "string" ? params.id : "";
+
+  const [product, setProduct] =
+    useState<Publication | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!publicationId) {
+      setLoading(false);
+      setError("Publicación no encontrada.");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadProduct() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data =
+          await getPublicationById(publicationId);
+
+        if (!cancelled) {
+          setProduct(data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "No fue posible cargar la publicación."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadProduct();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [publicationId]);
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f4f2ea] text-[#172019]">
+        <p className="text-sm text-[#747c75]">
+          Cargando publicación...
+        </p>
+      </main>
+    );
+  }
+
+  if (!product || error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f4f2ea] px-6 text-[#172019]">
+        <div className="max-w-md text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#ece4df] text-[#76594d]">
+            <CircleAlert size={23} />
+          </div>
+
+          <h1 className="mt-5 text-2xl font-semibold">
+            Publicación no disponible
+          </h1>
+
+          <p className="mt-3 text-sm leading-6 text-[#747c75]">
+            {error ||
+              "Esta publicación ya no se encuentra disponible."}
+          </p>
+
+          <Link
+            href="/productos"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#173c29] px-5 py-3 text-sm font-semibold text-white"
+          >
+            <ArrowLeft size={16} />
+            Volver al mercado
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const Icon = getIcon(product.category);
 
   return (
     <main className="min-h-screen bg-[#f4f2ea] text-[#172019]">
@@ -168,13 +196,11 @@ export default async function ProductPage({
           </Link>
 
           <span>/</span>
-
           <span>{product.category}</span>
-
           <span>/</span>
 
           <span className="font-medium text-[#172019]">
-            {product.name}
+            {product.title}
           </span>
         </div>
 
@@ -185,7 +211,6 @@ export default async function ProductPage({
                 <div className="absolute left-1/4 top-0 h-full w-px bg-[#173c29]" />
                 <div className="absolute left-1/2 top-0 h-full w-px bg-[#173c29]" />
                 <div className="absolute left-3/4 top-0 h-full w-px bg-[#173c29]" />
-
                 <div className="absolute left-0 top-1/3 h-px w-full bg-[#173c29]" />
                 <div className="absolute left-0 top-2/3 h-px w-full bg-[#173c29]" />
               </div>
@@ -193,14 +218,6 @@ export default async function ProductPage({
               <div className="absolute left-6 top-6 rounded-full bg-[#fffdf7] px-4 py-2 text-xs font-semibold">
                 {product.category}
               </div>
-
-              <button
-                type="button"
-                aria-label="Guardar publicación"
-                className="absolute right-6 top-6 flex h-11 w-11 items-center justify-center rounded-full bg-[#fffdf7] transition-colors hover:bg-[#173c29] hover:text-white"
-              >
-                <Heart size={18} />
-              </button>
 
               <div className="flex h-44 w-44 items-center justify-center rounded-full bg-[#173c29] text-white shadow-2xl shadow-[#173c29]/15">
                 <Icon
@@ -254,7 +271,8 @@ export default async function ProductPage({
                   </p>
 
                   <p className="mt-2 text-sm font-semibold">
-                    {product.minimum}
+                    {product.minimumOrder}{" "}
+                    {product.unit}
                   </p>
                 </div>
               </div>
@@ -268,47 +286,27 @@ export default async function ProductPage({
               </div>
 
               <div className="grid gap-px bg-[#172019]/10 sm:grid-cols-3">
-                <div className="bg-[#fffdf7] p-6">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e5eadb] text-[#315f3f]">
-                    <Boxes size={18} />
-                  </div>
+                <InfoCard
+                  icon={<Boxes size={18} />}
+                  title="Inventario disponible"
+                  value={`${product.stock} ${product.unit}`}
+                />
 
-                  <p className="mt-5 text-sm font-semibold">
-                    Inventario disponible
-                  </p>
+                <InfoCard
+                  icon={<Truck size={18} />}
+                  title="Entrega"
+                  value="A coordinar con el proveedor"
+                />
 
-                  <p className="mt-2 text-sm text-[#6d756e]">
-                    {product.available}
-                  </p>
-                </div>
-
-                <div className="bg-[#fffdf7] p-6">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e5eadb] text-[#315f3f]">
-                    <Truck size={18} />
-                  </div>
-
-                  <p className="mt-5 text-sm font-semibold">
-                    Entrega
-                  </p>
-
-                  <p className="mt-2 text-sm text-[#6d756e]">
-                    A coordinar con el proveedor
-                  </p>
-                </div>
-
-                <div className="bg-[#fffdf7] p-6">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e5eadb] text-[#315f3f]">
+                <InfoCard
+                  icon={
                     <CalendarDays size={18} />
-                  </div>
-
-                  <p className="mt-5 text-sm font-semibold">
-                    Publicado
-                  </p>
-
-                  <p className="mt-2 text-sm text-[#6d756e]">
-                    Recientemente
-                  </p>
-                </div>
+                  }
+                  title="Publicado"
+                  value={formatDate(
+                    product.createdAt
+                  )}
+                />
               </div>
             </section>
           </div>
@@ -318,11 +316,12 @@ export default async function ProductPage({
               <section className="rounded-[2rem] border border-[#172019]/10 bg-[#fffdf7] p-6 sm:p-8">
                 <div className="flex items-center gap-1.5 text-sm text-[#687169]">
                   <MapPin size={16} />
-                  {product.location}
+                  {product.municipality},{" "}
+                  {product.department}
                 </div>
 
                 <h1 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  {product.name}
+                  {product.title}
                 </h1>
 
                 <div className="mt-8 border-y border-[#172019]/10 py-6">
@@ -332,7 +331,7 @@ export default async function ProductPage({
 
                   <div className="mt-2 flex items-end gap-2">
                     <p className="text-4xl font-semibold tracking-[-0.04em]">
-                      {product.price}
+                      {formatPrice(product.price)}
                     </p>
 
                     <p className="pb-1 text-sm text-[#777f78]">
@@ -348,7 +347,8 @@ export default async function ProductPage({
                     </p>
 
                     <p className="mt-2 font-semibold">
-                      {product.available}
+                      {product.stock}{" "}
+                      {product.unit}
                     </p>
                   </div>
 
@@ -358,7 +358,8 @@ export default async function ProductPage({
                     </p>
 
                     <p className="mt-2 font-semibold">
-                      {product.minimum}
+                      {product.minimumOrder}{" "}
+                      {product.unit}
                     </p>
                   </div>
                 </div>
@@ -375,8 +376,9 @@ export default async function ProductPage({
                     <input
                       id="cantidad"
                       type="number"
-                      min="1"
-                      placeholder="Ej. 30"
+                      min={product.minimumOrder}
+                      max={product.stock}
+                      placeholder={`Mínimo ${product.minimumOrder}`}
                       className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm outline-none"
                     />
 
@@ -388,18 +390,11 @@ export default async function ProductPage({
 
                 <button
                   type="button"
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#173c29] px-6 py-4 text-sm font-semibold text-white transition-colors hover:bg-[#24583b]"
+                  disabled
+                  className="mt-6 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-[#173c29]/60 px-6 py-4 text-sm font-semibold text-white"
                 >
                   <PackageCheck size={17} />
-                  Solicitar reserva
-                </button>
-
-                <button
-                  type="button"
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[#172019]/15 px-6 py-4 text-sm font-semibold transition-colors hover:bg-[#f1f1e8]"
-                >
-                  <MessageSquareText size={17} />
-                  Contactar proveedor
+                  Reservas próximamente
                 </button>
 
                 <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[#edf0e6] p-4">
@@ -409,72 +404,80 @@ export default async function ProductPage({
                   />
 
                   <p className="text-xs leading-5 text-[#5f6b61]">
-                    La disponibilidad se confirmará antes de completar la
-                    operación.
+                    La disponibilidad será validada
+                    cuando conectemos el módulo de
+                    reservas.
                   </p>
                 </div>
               </section>
 
               <section className="rounded-[2rem] border border-[#172019]/10 bg-[#fffdf7] p-6">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#173c29] font-semibold text-white">
-                    {product.supplierInitials}
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#173c29] text-white">
+                    <Store size={20} />
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="truncate font-semibold">
-                        {product.supplier}
-                      </p>
+                    <p className="font-semibold">
+                      Proveedor
+                    </p>
 
-                      <BadgeCheck
-                        size={16}
-                        className="shrink-0 text-[#41734d]"
-                      />
-                    </div>
-
-                    <p className="mt-1 text-xs text-[#7d857e]">
-                      Proveedor verificado
+                    <p className="mt-1 truncate text-xs text-[#7d857e]">
+                      {product.seller?.email ??
+                        "Proveedor Agromarket"}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-3 border-t border-[#172019]/10 pt-5">
-                  <div>
-                    <p className="text-xs text-[#858c86]">
-                      Tipo
-                    </p>
+                <div className="mt-5 border-t border-[#172019]/10 pt-5">
+                  <p className="text-xs text-[#858c86]">
+                    Estado
+                  </p>
 
-                    <div className="mt-2 flex items-center gap-2">
-                      <Store size={15} />
-                      <p className="text-sm font-medium">
-                        Proveedor
-                      </p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-[#858c86]">
-                      Estado
-                    </p>
-
-                    <p className="mt-2 text-sm font-medium text-[#3d6b49]">
-                      Activo
-                    </p>
-                  </div>
+                  <p className="mt-2 text-sm font-medium text-[#3d6b49]">
+                    Activo
+                  </p>
                 </div>
 
-                <button
-                  type="button"
-                  className="mt-5 w-full rounded-xl border border-[#172019]/15 py-3 text-sm font-semibold transition-colors hover:bg-[#f1f1e8]"
-                >
-                  Ver perfil del proveedor
-                </button>
+                {product.seller?.email && (
+                  <a
+                    href={`mailto:${product.seller.email}`}
+                    className="mt-5 flex w-full items-center justify-center rounded-xl border border-[#172019]/15 py-3 text-sm font-semibold transition-colors hover:bg-[#f1f1e8]"
+                  >
+                    Contactar proveedor
+                  </a>
+                )}
               </section>
             </div>
           </aside>
         </section>
       </div>
     </main>
+  );
+}
+
+function InfoCard({
+  icon,
+  title,
+  value,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+}) {
+  return (
+    <div className="bg-[#fffdf7] p-6">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e5eadb] text-[#315f3f]">
+        {icon}
+      </div>
+
+      <p className="mt-5 text-sm font-semibold">
+        {title}
+      </p>
+
+      <p className="mt-2 text-sm text-[#6d756e]">
+        {value}
+      </p>
+    </div>
   );
 }
