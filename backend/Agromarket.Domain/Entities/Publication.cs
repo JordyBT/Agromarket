@@ -29,4 +29,7 @@ public class Publication
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public User User { get; set; } = null!;
+
+    public ICollection<Reservation> Reservations { get; set; }
+        = new List<Reservation>();
 }

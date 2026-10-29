@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Boxes,
   CalendarDays,
+  CheckCircle2,
   CircleAlert,
   Leaf,
   MapPin,
@@ -22,6 +23,8 @@ import {
   getPublicationById,
   type Publication,
 } from "@/services/publicationService";
+import { createReservation } from "@/services/reservationService";
+import { getUser } from "@/services/sessionService";
 
 function getIcon(category: string): LucideIcon {
   const value = category.toLowerCase();
@@ -67,8 +70,28 @@ export default function ProductPage() {
 
   const [product, setProduct] =
     useState<Publication | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [quantity, setQuantity] = useState("");
+  const [reservationError, setReservationError] =
+    useState("");
+  const [reservationSuccess, setReservationSuccess] =
+    useState(false);
+  const [reserving, setReserving] = useState(false);
+
+  const [userRole, setUserRole] = useState<
+    string | null
+  >(null);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const user = getUser();
+
+    setLoggedIn(Boolean(user));
+    setUserRole(user?.rol ?? null);
+  }, []);
 
   useEffect(() => {
     if (!publicationId) {
@@ -111,6 +134,82 @@ export default function ProductPage() {
       cancelled = true;
     };
   }, [publicationId]);
+
+  async function handleReservation() {
+    if (!product) {
+      return;
+    }
+
+    setReservationError("");
+    setReservationSuccess(false);
+
+    if (!loggedIn) {
+      setReservationError(
+        "Debes iniciar sesión como comprador para solicitar una reserva."
+      );
+      return;
+    }
+
+    if (userRole !== "Comprador") {
+      setReservationError(
+        "Solo las cuentas de comprador pueden solicitar reservas."
+      );
+      return;
+    }
+
+    if (!quantity.trim()) {
+      setReservationError(
+        "Ingresa la cantidad que deseas reservar."
+      );
+      return;
+    }
+
+    const numericQuantity = Number(quantity);
+
+    if (
+      !Number.isInteger(numericQuantity) ||
+      numericQuantity <= 0
+    ) {
+      setReservationError(
+        "La cantidad debe ser un número entero mayor que cero."
+      );
+      return;
+    }
+
+    if (numericQuantity < product.minimumOrder) {
+      setReservationError(
+        `La compra mínima es de ${product.minimumOrder} ${product.unit}.`
+      );
+      return;
+    }
+
+    if (numericQuantity > product.stock) {
+      setReservationError(
+        "La cantidad solicitada supera el inventario disponible."
+      );
+      return;
+    }
+
+    try {
+      setReserving(true);
+
+      await createReservation({
+        publicationId: product.id,
+        quantity: numericQuantity,
+      });
+
+      setReservationSuccess(true);
+      setQuantity("");
+    } catch (err) {
+      setReservationError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible crear la reserva."
+      );
+    } finally {
+      setReserving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -364,6 +463,39 @@ export default function ProductPage() {
                   </div>
                 </div>
 
+                {reservationSuccess && (
+                  <div className="mt-6 flex items-start gap-3 rounded-2xl border border-[#4d7c59]/20 bg-[#e4ebdc] p-4">
+                    <CheckCircle2
+                      size={19}
+                      className="mt-0.5 shrink-0 text-[#315f3f]"
+                    />
+
+                    <div>
+                      <p className="text-sm font-semibold text-[#315f3f]">
+                        Reserva solicitada
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-[#5e695f]">
+                        El proveedor debe aceptar o
+                        rechazar tu solicitud.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {reservationError && (
+                  <div className="mt-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4">
+                    <CircleAlert
+                      size={19}
+                      className="mt-0.5 shrink-0 text-red-600"
+                    />
+
+                    <p className="text-xs leading-5 text-red-700">
+                      {reservationError}
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-6">
                   <label
                     htmlFor="cantidad"
@@ -378,6 +510,15 @@ export default function ProductPage() {
                       type="number"
                       min={product.minimumOrder}
                       max={product.stock}
+                      step="1"
+                      value={quantity}
+                      onChange={(event) => {
+                        setQuantity(
+                          event.target.value
+                        );
+                        setReservationError("");
+                        setReservationSuccess(false);
+                      }}
                       placeholder={`Mínimo ${product.minimumOrder}`}
                       className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm outline-none"
                     />
@@ -388,14 +529,36 @@ export default function ProductPage() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  disabled
-                  className="mt-6 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-[#173c29]/60 px-6 py-4 text-sm font-semibold text-white"
-                >
-                  <PackageCheck size={17} />
-                  Reservas próximamente
-                </button>
+                {!loggedIn ? (
+                  <Link
+                    href="/login"
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#173c29] px-6 py-4 text-sm font-semibold text-white transition-colors hover:bg-[#24583b]"
+                  >
+                    Iniciar sesión para reservar
+                  </Link>
+                ) : userRole === "Comprador" ? (
+                  <button
+                    type="button"
+                    onClick={handleReservation}
+                    disabled={reserving}
+                    className="mt-6 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#173c29] px-6 py-4 text-sm font-semibold text-white transition-colors hover:bg-[#24583b] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <PackageCheck size={17} />
+
+                    {reserving
+                      ? "Solicitando..."
+                      : "Solicitar reserva"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-6 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-[#173c29]/50 px-6 py-4 text-sm font-semibold text-white"
+                  >
+                    <PackageCheck size={17} />
+                    Solo compradores pueden reservar
+                  </button>
+                )}
 
                 <div className="mt-6 flex items-start gap-3 rounded-2xl bg-[#edf0e6] p-4">
                   <ShieldCheck
@@ -404,9 +567,8 @@ export default function ProductPage() {
                   />
 
                   <p className="text-xs leading-5 text-[#5f6b61]">
-                    La disponibilidad será validada
-                    cuando conectemos el módulo de
-                    reservas.
+                    La solicitud no descuenta inventario
+                    hasta que el proveedor la acepte.
                   </p>
                 </div>
               </section>

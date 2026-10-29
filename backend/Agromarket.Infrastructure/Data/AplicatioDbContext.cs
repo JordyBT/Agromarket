@@ -15,6 +15,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<Publication> Publications => Set<Publication>();
+    public DbSet<Reservation> Reservations => Set<Reservation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -113,6 +114,36 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(x => x.User)
                 .WithMany(x => x.Publications)
                 .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Reservation>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Quantity)
+                .IsRequired();
+
+            entity.Property(x => x.UnitPrice)
+                .HasPrecision(12, 2);
+
+            entity.Property(x => x.Status)
+                .HasConversion<string>()
+                .IsRequired()
+                .HasMaxLength(30);
+
+            entity.HasIndex(x => x.PublicationId);
+            entity.HasIndex(x => x.BuyerId);
+            entity.HasIndex(x => x.Status);
+
+            entity.HasOne(x => x.Publication)
+                .WithMany(x => x.Reservations)
+                .HasForeignKey(x => x.PublicationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Buyer)
+                .WithMany(x => x.ReservationsAsBuyer)
+                .HasForeignKey(x => x.BuyerId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

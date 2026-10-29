@@ -20,4 +20,7 @@ public class User
 
     public ICollection<Publication> Publications { get; set; }
         = new List<Publication>();
+
+    public ICollection<Reservation> ReservationsAsBuyer { get; set; }
+        = new List<Reservation>();
 }
