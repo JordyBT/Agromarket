@@ -18,6 +18,10 @@ import {
   Sprout,
   Tag,
 } from "lucide-react";
+import {
+  getMyPublicationById,
+  updatePublication,
+} from "@/services/publicationService";
 
 type PublicationForm = {
   nombre: string;
@@ -34,65 +38,6 @@ type PublicationForm = {
 type FormErrors = Partial<
   Record<keyof PublicationForm, string>
 >;
-
-type DemoPublication = PublicationForm & {
-  id: string;
-};
-
-const publications: DemoPublication[] = [
-  {
-    id: "1",
-    nombre: "Maíz amarillo",
-    categoria: "Granos y cereales",
-    descripcion:
-      "Maíz amarillo nacional disponible para venta al por mayor. Producto almacenado en condiciones adecuadas y listo para despacho.",
-    precio: "185",
-    unidad: "quintal",
-    inventario: "240",
-    minimo: "20",
-    departamento: "Zacapa",
-    municipio: "Zacapa",
-  },
-  {
-    id: "2",
-    nombre: "Frijol negro",
-    categoria: "Granos y cereales",
-    descripcion:
-      "Frijol negro seleccionado y disponible para compradores mayoristas. Producción regional con disponibilidad inmediata.",
-    precio: "465",
-    unidad: "quintal",
-    inventario: "85",
-    minimo: "10",
-    departamento: "Chiquimula",
-    municipio: "Chiquimula",
-  },
-  {
-    id: "3",
-    nombre: "Tomate manzano",
-    categoria: "Hortalizas",
-    descripcion:
-      "Tomate manzano de producción local, seleccionado para comercialización y distribución dentro del mercado nacional.",
-    precio: "145",
-    unidad: "caja",
-    inventario: "0",
-    minimo: "5",
-    departamento: "Jalapa",
-    municipio: "Jalapa",
-  },
-  {
-    id: "4",
-    nombre: "Café pergamino",
-    categoria: "Café",
-    descripcion:
-      "Café pergamino seco producido en la región oriental. Disponible para compradores y distribuidores mayoristas.",
-    precio: "1250",
-    unidad: "quintal",
-    inventario: "40",
-    minimo: "5",
-    departamento: "Chiquimula",
-    municipio: "Esquipulas",
-  },
-];
 
 const emptyForm: PublicationForm = {
   nombre: "",
@@ -118,39 +63,63 @@ export default function EditarPublicacionPage() {
   const [errors, setErrors] =
     useState<FormErrors>({});
 
-  const [success, setSuccess] =
-    useState(false);
-
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [serverError, setServerError] = useState("");
   const [publicationFound, setPublicationFound] =
     useState(true);
 
   useEffect(() => {
     if (!publicationId) {
-      return;
-    }
-
-    const publication = publications.find(
-      (item) => item.id === publicationId
-    );
-
-    if (!publication) {
+      setLoading(false);
       setPublicationFound(false);
       return;
     }
 
-    setPublicationFound(true);
+    let cancelled = false;
 
-    setForm({
-      nombre: publication.nombre,
-      categoria: publication.categoria,
-      descripcion: publication.descripcion,
-      precio: publication.precio,
-      unidad: publication.unidad,
-      inventario: publication.inventario,
-      minimo: publication.minimo,
-      departamento: publication.departamento,
-      municipio: publication.municipio,
-    });
+    async function loadPublication() {
+      try {
+        setLoading(true);
+        setServerError("");
+
+        const publication =
+          await getMyPublicationById(publicationId);
+
+        if (cancelled) {
+          return;
+        }
+
+        setForm({
+          nombre: publication.title,
+          categoria: publication.category,
+          descripcion: publication.description,
+          precio: publication.price.toString(),
+          unidad: publication.unit.toLowerCase(),
+          inventario: publication.stock.toString(),
+          minimo: publication.minimumOrder.toString(),
+          departamento: publication.department,
+          municipio: publication.municipality,
+        });
+
+        setPublicationFound(true);
+      } catch {
+        if (!cancelled) {
+          setPublicationFound(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadPublication();
+
+    return () => {
+      cancelled = true;
+    };
   }, [publicationId]);
 
   function updateField(
@@ -168,6 +137,7 @@ export default function EditarPublicacionPage() {
     }));
 
     setSuccess(false);
+    setServerError("");
   }
 
   function validateForm() {
@@ -194,8 +164,7 @@ export default function EditarPublicacionPage() {
     }
 
     if (!form.precio) {
-      newErrors.precio =
-        "Ingresa el precio.";
+      newErrors.precio = "Ingresa el precio.";
     } else if (
       Number.isNaN(Number(form.precio)) ||
       Number(form.precio) <= 0
@@ -253,7 +222,7 @@ export default function EditarPublicacionPage() {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(
+  async function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
@@ -269,12 +238,68 @@ export default function EditarPublicacionPage() {
       return;
     }
 
-    setSuccess(true);
+    try {
+      setSaving(true);
+      setSuccess(false);
+      setServerError("");
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+      const updated = await updatePublication(
+        publicationId,
+        {
+          title: form.nombre.trim(),
+          category: form.categoria,
+          description: form.descripcion.trim(),
+          price: Number(form.precio),
+          unit: form.unidad,
+          stock: Number(form.inventario),
+          minimumOrder: Number(form.minimo),
+          department: form.departamento,
+          municipality: form.municipio.trim(),
+        }
+      );
+
+      setForm({
+        nombre: updated.title,
+        categoria: updated.category,
+        descripcion: updated.description,
+        precio: updated.price.toString(),
+        unidad: updated.unit.toLowerCase(),
+        inventario: updated.stock.toString(),
+        minimo: updated.minimumOrder.toString(),
+        departamento: updated.department,
+        municipio: updated.municipality,
+      });
+
+      setSuccess(true);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (error) {
+      setServerError(
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar los cambios."
+      );
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f4f2ea] text-[#172019]">
+        <p className="text-sm text-[#747c75]">
+          Cargando publicación...
+        </p>
+      </main>
+    );
   }
 
   if (!publicationFound) {
@@ -290,8 +315,8 @@ export default function EditarPublicacionPage() {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-[#747c75]">
-            No encontramos una publicación con ese
-            identificador.
+            Esta publicación no existe o no pertenece a
+            tu cuenta.
           </p>
 
           <Link
@@ -342,15 +367,26 @@ export default function EditarPublicacionPage() {
 
             <div>
               <p className="font-semibold">
-                Cambios validados correctamente.
+                Publicación actualizada correctamente.
               </p>
 
               <p className="mt-1 text-sm leading-6 text-[#5e695f]">
-                Estamos simulando la actualización.
-                Cuando conectemos la API, estos cambios
-                quedarán guardados en PostgreSQL.
+                Los cambios ya fueron guardados en
+                Agromarket.
               </p>
             </div>
+          </div>
+        )}
+
+        {serverError && (
+          <div className="mb-8 flex items-start gap-4 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
+            <CircleAlert
+              size={20}
+              className="mt-0.5 shrink-0"
+            />
+            <p className="text-sm">
+              {serverError}
+            </p>
           </div>
         )}
 
@@ -376,21 +412,11 @@ export default function EditarPublicacionPage() {
             className="space-y-6"
           >
             <section className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6 sm:p-8">
-              <div className="flex items-center gap-3 border-b border-[#172019]/10 pb-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e4e8d8] text-[#315f3f]">
-                  <Tag size={18} />
-                </div>
-
-                <div>
-                  <h2 className="font-semibold">
-                    Información del producto
-                  </h2>
-
-                  <p className="mt-1 text-xs text-[#7a817b]">
-                    Datos principales visibles en el mercado.
-                  </p>
-                </div>
-              </div>
+              <SectionTitle
+                icon={<Tag size={18} />}
+                title="Información del producto"
+                description="Datos principales visibles en el mercado."
+              />
 
               <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <FormField
@@ -432,23 +458,18 @@ export default function EditarPublicacionPage() {
                     <option value="">
                       Selecciona una categoría
                     </option>
-
                     <option value="Granos y cereales">
                       Granos y cereales
                     </option>
-
                     <option value="Frutas">
                       Frutas
                     </option>
-
                     <option value="Hortalizas">
                       Hortalizas
                     </option>
-
                     <option value="Café">
                       Café
                     </option>
-
                     <option value="Otros">
                       Otros
                     </option>
@@ -480,21 +501,11 @@ export default function EditarPublicacionPage() {
             </section>
 
             <section className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6 sm:p-8">
-              <div className="flex items-center gap-3 border-b border-[#172019]/10 pb-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e4e8d8] text-[#315f3f]">
-                  <Package size={18} />
-                </div>
-
-                <div>
-                  <h2 className="font-semibold">
-                    Precio e inventario
-                  </h2>
-
-                  <p className="mt-1 text-xs text-[#7a817b]">
-                    Define las condiciones comerciales.
-                  </p>
-                </div>
-              </div>
+              <SectionTitle
+                icon={<Package size={18} />}
+                title="Precio e inventario"
+                description="Define las condiciones comerciales."
+              />
 
               <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <FormField
@@ -543,23 +554,18 @@ export default function EditarPublicacionPage() {
                     <option value="">
                       Selecciona una unidad
                     </option>
-
                     <option value="quintal">
                       Quintal
                     </option>
-
                     <option value="caja">
                       Caja
                     </option>
-
                     <option value="libra">
                       Libra
                     </option>
-
                     <option value="kilogramo">
                       Kilogramo
                     </option>
-
                     <option value="unidad">
                       Unidad
                     </option>
@@ -611,21 +617,11 @@ export default function EditarPublicacionPage() {
             </section>
 
             <section className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6 sm:p-8">
-              <div className="flex items-center gap-3 border-b border-[#172019]/10 pb-5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e4e8d8] text-[#315f3f]">
-                  <MapPin size={18} />
-                </div>
-
-                <div>
-                  <h2 className="font-semibold">
-                    Ubicación
-                  </h2>
-
-                  <p className="mt-1 text-xs text-[#7a817b]">
-                    Indica dónde está disponible el producto.
-                  </p>
-                </div>
-              </div>
+              <SectionTitle
+                icon={<MapPin size={18} />}
+                title="Ubicación"
+                description="Indica dónde está disponible el producto."
+              />
 
               <div className="mt-6 grid gap-5 sm:grid-cols-2">
                 <FormField
@@ -647,25 +643,26 @@ export default function EditarPublicacionPage() {
                     <option value="">
                       Selecciona departamento
                     </option>
-
                     <option value="Zacapa">
                       Zacapa
                     </option>
-
                     <option value="Chiquimula">
                       Chiquimula
                     </option>
-
                     <option value="Jalapa">
                       Jalapa
                     </option>
-
                     <option value="Jutiapa">
                       Jutiapa
                     </option>
-
                     <option value="Izabal">
                       Izabal
+                    </option>
+                    <option value="Guatemala">
+                      Guatemala
+                    </option>
+                    <option value="Huehuetenango">
+                      Huehuetenango
                     </option>
                   </select>
                 </FormField>
@@ -702,10 +699,13 @@ export default function EditarPublicacionPage() {
 
               <button
                 type="submit"
-                className="flex cursor-pointer items-center justify-center gap-2 rounded-full bg-[#173c29] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#24583b]"
+                disabled={saving}
+                className="flex cursor-pointer items-center justify-center gap-2 rounded-full bg-[#173c29] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#24583b] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save size={16} />
-                Guardar cambios
+                {saving
+                  ? "Guardando..."
+                  : "Guardar cambios"}
               </button>
             </div>
           </form>
@@ -796,29 +796,50 @@ export default function EditarPublicacionPage() {
                       "unidades"}
                   </p>
                 </div>
-
-                <p className="mt-6 text-xs leading-5 text-[#858c86]">
-                  Esta vista previa se actualiza mientras
-                  modificas los datos.
-                </p>
               </div>
             </div>
 
             <div className="mt-4 rounded-2xl border border-[#172019]/10 bg-[#e8e6da] p-5">
               <p className="text-sm font-semibold">
-                Publicación #{publicationId}
+                Publicación
               </p>
 
-              <p className="mt-2 text-xs leading-5 text-[#717871]">
-                En la versión final, los datos se
-                cargarán desde ASP.NET Core utilizando
-                el identificador de esta publicación.
+              <p className="mt-2 break-all text-xs leading-5 text-[#717871]">
+                {publicationId}
               </p>
             </div>
           </aside>
         </div>
       </div>
     </main>
+  );
+}
+
+function SectionTitle({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 border-b border-[#172019]/10 pb-5">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#e4e8d8] text-[#315f3f]">
+        {icon}
+      </div>
+
+      <div>
+        <h2 className="font-semibold">
+          {title}
+        </h2>
+
+        <p className="mt-1 text-xs text-[#7a817b]">
+          {description}
+        </p>
+      </div>
+    </div>
   );
 }
 

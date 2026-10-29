@@ -72,22 +72,195 @@ public class PublicationsController : ControllerBase
         return CreatedAtAction(
             nameof(GetById),
             new { id = publication.Id },
-            new
-            {
-                publication.Id,
-                publication.Title,
-                publication.Description,
-                publication.Price,
-                publication.Stock,
-                publication.Unit,
-                publication.Category,
-                publication.MinimumOrder,
-                publication.Department,
-                publication.Municipality,
-                publication.IsActive,
-                publication.CreatedAt
-            }
+            ToResponse(publication)
         );
+    }
+
+    [Authorize(Roles = "Proveedor,Administrador")]
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMine()
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var publications = await _context.Publications
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new
+            {
+                x.Id,
+                x.Title,
+                x.Description,
+                x.Price,
+                x.Stock,
+                x.Unit,
+                x.Category,
+                x.MinimumOrder,
+                x.Department,
+                x.Municipality,
+                x.IsActive,
+                x.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(publications);
+    }
+
+    [Authorize(Roles = "Proveedor,Administrador")]
+    [HttpGet("mine/{id:guid}")]
+    public async Task<IActionResult> GetMineById(Guid id)
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var publication = await _context.Publications
+            .AsNoTracking()
+            .Where(x =>
+                x.Id == id &&
+                x.UserId == userId
+            )
+            .Select(x => new
+            {
+                x.Id,
+                x.Title,
+                x.Description,
+                x.Price,
+                x.Stock,
+                x.Unit,
+                x.Category,
+                x.MinimumOrder,
+                x.Department,
+                x.Municipality,
+                x.IsActive,
+                x.CreatedAt
+            })
+            .FirstOrDefaultAsync();
+
+        if (publication is null)
+        {
+            return NotFound(new
+            {
+                message = "Publicación no encontrada."
+            });
+        }
+
+        return Ok(publication);
+    }
+
+    [Authorize(Roles = "Proveedor,Administrador")]
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(
+        Guid id,
+        UpdatePublicationRequest request
+    )
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (
+            request.Stock > 0 &&
+            request.MinimumOrder > request.Stock
+        )
+        {
+            return BadRequest(new
+            {
+                message = "La compra mínima no puede superar el inventario disponible."
+            });
+        }
+
+        var publication = await _context.Publications
+            .FirstOrDefaultAsync(x =>
+                x.Id == id &&
+                x.UserId == userId
+            );
+
+        if (publication is null)
+        {
+            return NotFound(new
+            {
+                message = "Publicación no encontrada."
+            });
+        }
+
+        publication.Title = request.Title.Trim();
+        publication.Description = request.Description.Trim();
+        publication.Price = request.Price;
+        publication.Stock = request.Stock;
+        publication.Unit = request.Unit.Trim();
+        publication.Category = request.Category.Trim();
+        publication.MinimumOrder = request.MinimumOrder;
+        publication.Department = request.Department.Trim();
+        publication.Municipality = request.Municipality.Trim();
+
+        if (publication.Stock == 0)
+        {
+            publication.IsActive = false;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(ToResponse(publication));
+    }
+
+    [Authorize(Roles = "Proveedor,Administrador")]
+    [HttpPatch("{id:guid}/status/{isActive:bool}")]
+    public async Task<IActionResult> UpdateStatus(
+        Guid id,
+        bool isActive
+    )
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var publication = await _context.Publications
+            .FirstOrDefaultAsync(x =>
+                x.Id == id &&
+                x.UserId == userId
+            );
+
+        if (publication is null)
+        {
+            return NotFound(new
+            {
+                message = "Publicación no encontrada."
+            });
+        }
+
+        if (isActive && publication.Stock <= 0)
+        {
+            return BadRequest(new
+            {
+                message = "No puedes activar una publicación sin inventario."
+            });
+        }
+
+        publication.IsActive = isActive;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            publication.Id,
+            publication.IsActive,
+            publication.Stock
+        });
     }
 
     [Authorize(Roles = "Proveedor,Administrador")]
@@ -179,7 +352,10 @@ public class PublicationsController : ControllerBase
     {
         var publications = await _context.Publications
             .AsNoTracking()
-            .Where(x => x.IsActive)
+            .Where(x =>
+                x.IsActive &&
+                x.Stock > 0
+            )
             .OrderByDescending(x => x.CreatedAt)
             .Select(x => new
             {
@@ -193,6 +369,7 @@ public class PublicationsController : ControllerBase
                 x.MinimumOrder,
                 x.Department,
                 x.Municipality,
+                x.IsActive,
                 x.CreatedAt,
                 Seller = new
                 {
@@ -210,7 +387,11 @@ public class PublicationsController : ControllerBase
     {
         var publication = await _context.Publications
             .AsNoTracking()
-            .Where(x => x.Id == id && x.IsActive)
+            .Where(x =>
+                x.Id == id &&
+                x.IsActive &&
+                x.Stock > 0
+            )
             .Select(x => new
             {
                 x.Id,
@@ -223,6 +404,7 @@ public class PublicationsController : ControllerBase
                 x.MinimumOrder,
                 x.Department,
                 x.Municipality,
+                x.IsActive,
                 x.CreatedAt,
                 Seller = new
                 {
@@ -241,5 +423,26 @@ public class PublicationsController : ControllerBase
         }
 
         return Ok(publication);
+    }
+
+    private static object ToResponse(
+        Publication publication
+    )
+    {
+        return new
+        {
+            publication.Id,
+            publication.Title,
+            publication.Description,
+            publication.Price,
+            publication.Stock,
+            publication.Unit,
+            publication.Category,
+            publication.MinimumOrder,
+            publication.Department,
+            publication.Municipality,
+            publication.IsActive,
+            publication.CreatedAt
+        };
     }
 }

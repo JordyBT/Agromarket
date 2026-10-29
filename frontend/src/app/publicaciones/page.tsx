@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,67 +19,16 @@ import {
   Sprout,
   Wheat,
 } from "lucide-react";
+import {
+  getMyPublications,
+  type Publication,
+  updatePublicationStatus,
+} from "@/services/publicationService";
 
-type PublicationStatus = "Activa" | "Pausada" | "Agotada";
-
-type Publication = {
-  id: number;
-  name: string;
-  category: string;
-  location: string;
-  price: string;
-  unit: string;
-  stock: string;
-  status: PublicationStatus;
-  icon: typeof Wheat;
-};
-
-const initialPublications: Publication[] = [
-  {
-    id: 1,
-    name: "Maíz amarillo",
-    category: "Granos y cereales",
-    location: "Zacapa",
-    price: "Q 185.00",
-    unit: "quintal",
-    stock: "240 qq",
-    status: "Activa",
-    icon: Wheat,
-  },
-  {
-    id: 2,
-    name: "Frijol negro",
-    category: "Granos y cereales",
-    location: "Chiquimula",
-    price: "Q 465.00",
-    unit: "quintal",
-    stock: "85 qq",
-    status: "Activa",
-    icon: Leaf,
-  },
-  {
-    id: 3,
-    name: "Tomate manzano",
-    category: "Hortalizas",
-    location: "Jalapa",
-    price: "Q 145.00",
-    unit: "caja",
-    stock: "0 cajas",
-    status: "Agotada",
-    icon: Sprout,
-  },
-  {
-    id: 4,
-    name: "Café pergamino",
-    category: "Café",
-    location: "Chiquimula",
-    price: "Q 1,250.00",
-    unit: "quintal",
-    stock: "40 qq",
-    status: "Pausada",
-    icon: Leaf,
-  },
-];
+type PublicationStatus =
+  | "Activa"
+  | "Pausada"
+  | "Agotada";
 
 const filters = [
   "Todas",
@@ -87,86 +37,173 @@ const filters = [
   "Agotadas",
 ];
 
-export default function PublicacionesPage() {
-  const [publications, setPublications] =
-    useState<Publication[]>(initialPublications);
+function getStatus(
+  publication: Publication
+): PublicationStatus {
+  if (publication.stock <= 0) {
+    return "Agotada";
+  }
 
+  return publication.isActive
+    ? "Activa"
+    : "Pausada";
+}
+
+function getIcon(category: string): LucideIcon {
+  const value = category.toLowerCase();
+
+  if (
+    value.includes("grano") ||
+    value.includes("cereal")
+  ) {
+    return Wheat;
+  }
+
+  if (
+    value.includes("hortaliza") ||
+    value.includes("vegetal")
+  ) {
+    return Sprout;
+  }
+
+  return Leaf;
+}
+
+function formatPrice(price: number) {
+  return new Intl.NumberFormat("es-GT", {
+    style: "currency",
+    currency: "GTQ",
+    minimumFractionDigits: 2,
+  }).format(price);
+}
+
+export default function PublicacionesPage() {
+  const [publications, setPublications] = useState<
+    Publication[]
+  >([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Todas");
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<
+    string | null
+  >(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadPublications() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await getMyPublications();
+        setPublications(data);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "No fue posible cargar las publicaciones."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadPublications();
+  }, []);
 
   const filteredPublications = useMemo(() => {
+    const searchValue = search
+      .trim()
+      .toLowerCase();
+
     return publications.filter((publication) => {
-      const searchValue = search
-        .trim()
-        .toLowerCase();
+      const status = getStatus(publication);
+
+      const location =
+        `${publication.municipality} ${publication.department}`.toLowerCase();
 
       const matchesSearch =
-        publication.name
+        publication.title
           .toLowerCase()
           .includes(searchValue) ||
         publication.category
           .toLowerCase()
           .includes(searchValue) ||
-        publication.location
-          .toLowerCase()
-          .includes(searchValue);
+        location.includes(searchValue);
 
       let matchesFilter = true;
 
       if (filter === "Activas") {
-        matchesFilter =
-          publication.status === "Activa";
+        matchesFilter = status === "Activa";
       }
 
       if (filter === "Pausadas") {
-        matchesFilter =
-          publication.status === "Pausada";
+        matchesFilter = status === "Pausada";
       }
 
       if (filter === "Agotadas") {
-        matchesFilter =
-          publication.status === "Agotada";
+        matchesFilter = status === "Agotada";
       }
 
       return matchesSearch && matchesFilter;
     });
   }, [publications, search, filter]);
 
-  function toggleStatus(id: number) {
-    setPublications((current) =>
-      current.map((publication) => {
-        if (publication.id !== id) {
-          return publication;
-        }
+  async function toggleStatus(
+    publication: Publication
+  ) {
+    const status = getStatus(publication);
 
-        if (publication.status === "Agotada") {
-          return publication;
-        }
+    if (status === "Agotada") {
+      return;
+    }
 
-        return {
-          ...publication,
-          status:
-            publication.status === "Activa"
-              ? "Pausada"
-              : "Activa",
-        };
-      })
-    );
+    const nextStatus = !publication.isActive;
+
+    try {
+      setUpdatingId(publication.id);
+      setError("");
+
+      const result =
+        await updatePublicationStatus(
+          publication.id,
+          nextStatus
+        );
+
+      setPublications((current) =>
+        current.map((item) =>
+          item.id === publication.id
+            ? {
+                ...item,
+                isActive: result.isActive,
+              }
+            : item
+        )
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible actualizar la publicación."
+      );
+    } finally {
+      setUpdatingId(null);
+    }
   }
 
   const activeCount = publications.filter(
     (publication) =>
-      publication.status === "Activa"
+      getStatus(publication) === "Activa"
   ).length;
 
   const pausedCount = publications.filter(
     (publication) =>
-      publication.status === "Pausada"
+      getStatus(publication) === "Pausada"
   ).length;
 
   const soldOutCount = publications.filter(
     (publication) =>
-      publication.status === "Agotada"
+      getStatus(publication) === "Agotada"
   ).length;
 
   return (
@@ -250,6 +287,12 @@ export default function PublicacionesPage() {
             />
           </div>
         </section>
+
+        {error && (
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            {error}
+          </div>
+        )}
 
         <section className="mt-10 grid gap-3 sm:grid-cols-3">
           <article className="rounded-2xl border border-[#172019]/10 bg-[#fffdf7] p-5">
@@ -340,11 +383,22 @@ export default function PublicacionesPage() {
             </p>
           </div>
 
-          {filteredPublications.length > 0 ? (
+          {loading ? (
+            <div className="mt-8 flex min-h-80 items-center justify-center rounded-3xl border border-[#172019]/10 bg-[#fffdf7]">
+              <p className="text-sm text-[#747c75]">
+                Cargando publicaciones...
+              </p>
+            </div>
+          ) : filteredPublications.length > 0 ? (
             <div className="mt-5 space-y-3">
               {filteredPublications.map(
                 (publication) => {
-                  const Icon = publication.icon;
+                  const status =
+                    getStatus(publication);
+
+                  const Icon = getIcon(
+                    publication.category
+                  );
 
                   return (
                     <article
@@ -363,32 +417,41 @@ export default function PublicacionesPage() {
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <h2 className="text-xl font-semibold tracking-[-0.03em]">
-                                {publication.name}
+                                {publication.title}
                               </h2>
 
                               <StatusBadge
-                                status={
-                                  publication.status
-                                }
+                                status={status}
                               />
                             </div>
 
                             <p className="mt-1 text-xs text-[#7d847e]">
-                              {publication.category}
+                              {
+                                publication.category
+                              }
                             </p>
 
                             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#697169]">
                               <span className="flex items-center gap-1.5">
                                 <MapPin size={13} />
                                 {
-                                  publication.location
+                                  publication.municipality
+                                }
+                                ,{" "}
+                                {
+                                  publication.department
                                 }
                               </span>
 
                               <span>
                                 Inventario:{" "}
                                 <strong className="font-semibold text-[#172019]">
-                                  {publication.stock}
+                                  {
+                                    publication.stock
+                                  }{" "}
+                                  {
+                                    publication.unit
+                                  }
                                 </strong>
                               </span>
                             </div>
@@ -397,7 +460,9 @@ export default function PublicacionesPage() {
 
                         <div className="flex min-w-[145px] flex-col xl:items-end">
                           <p className="text-lg font-semibold">
-                            {publication.price}
+                            {formatPrice(
+                              publication.price
+                            )}
                           </p>
 
                           <p className="text-xs text-[#7c837d]">
@@ -406,13 +471,15 @@ export default function PublicacionesPage() {
                         </div>
 
                         <div className="flex flex-wrap gap-2 xl:justify-end">
-                          <Link
-                            href={`/productos/${publication.id}`}
-                            className="flex items-center gap-2 rounded-full border border-[#172019]/15 px-4 py-2.5 text-xs font-semibold transition-colors hover:bg-[#f0efe7]"
-                          >
-                            <Eye size={15} />
-                            Ver
-                          </Link>
+                          {status === "Activa" && (
+                            <Link
+                              href={`/productos/${publication.id}`}
+                              className="flex items-center gap-2 rounded-full border border-[#172019]/15 px-4 py-2.5 text-xs font-semibold transition-colors hover:bg-[#f0efe7]"
+                            >
+                              <Eye size={15} />
+                              Ver
+                            </Link>
+                          )}
 
                           <Link
                             href={`/publicaciones/${publication.id}/editar`}
@@ -422,24 +489,29 @@ export default function PublicacionesPage() {
                             Editar
                           </Link>
 
-                          {publication.status !==
-                            "Agotada" && (
+                          {status !== "Agotada" && (
                             <button
                               type="button"
+                              disabled={
+                                updatingId ===
+                                publication.id
+                              }
                               onClick={() =>
                                 toggleStatus(
-                                  publication.id
+                                  publication
                                 )
                               }
-                              className={`flex cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold transition-colors ${
-                                publication.status ===
-                                "Activa"
+                              className={`flex cursor-pointer items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                status === "Activa"
                                   ? "border border-[#876f4a]/20 bg-[#f1ecde] text-[#705d3d] hover:bg-[#e9e1cf]"
                                   : "bg-[#173c29] text-white hover:bg-[#24583b]"
                               }`}
                             >
-                              {publication.status ===
-                              "Activa" ? (
+                              {updatingId ===
+                              publication.id ? (
+                                "Actualizando..."
+                              ) : status ===
+                                "Activa" ? (
                                 <>
                                   <CirclePause
                                     size={15}
@@ -474,8 +546,8 @@ export default function PublicacionesPage() {
               </h2>
 
               <p className="mt-2 max-w-md text-sm leading-6 text-[#747c75]">
-                Cambia los filtros o busca utilizando
-                otro término.
+                Crea una publicación o cambia los
+                filtros de búsqueda.
               </p>
             </div>
           )}
