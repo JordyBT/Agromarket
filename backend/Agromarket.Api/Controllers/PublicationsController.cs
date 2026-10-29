@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Agromarket.Application.DTOs;
 using Agromarket.Domain.Entities;
 using Agromarket.Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
@@ -16,6 +17,77 @@ public class PublicationsController : ControllerBase
     public PublicationsController(ApplicationDbContext context)
     {
         _context = context;
+    }
+
+    [Authorize(Roles = "Proveedor,Administrador")]
+    [HttpPost]
+    public async Task<IActionResult> Create(CreatePublicationRequest request)
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        if (request.MinimumOrder > request.Stock)
+        {
+            return BadRequest(new
+            {
+                message = "La compra mínima no puede superar el inventario disponible."
+            });
+        }
+
+        var userExists = await _context.Users
+            .AnyAsync(x => x.Id == userId && x.IsActive);
+
+        if (!userExists)
+        {
+            return NotFound(new
+            {
+                message = "Usuario no encontrado."
+            });
+        }
+
+        var publication = new Publication
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            Title = request.Title.Trim(),
+            Description = request.Description.Trim(),
+            Price = request.Price,
+            Stock = request.Stock,
+            Unit = request.Unit.Trim(),
+            Category = request.Category.Trim(),
+            MinimumOrder = request.MinimumOrder,
+            Department = request.Department.Trim(),
+            Municipality = request.Municipality.Trim(),
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Publications.Add(publication);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = publication.Id },
+            new
+            {
+                publication.Id,
+                publication.Title,
+                publication.Description,
+                publication.Price,
+                publication.Stock,
+                publication.Unit,
+                publication.Category,
+                publication.MinimumOrder,
+                publication.Department,
+                publication.Municipality,
+                publication.IsActive,
+                publication.CreatedAt
+            }
+        );
     }
 
     [Authorize(Roles = "Proveedor,Administrador")]
@@ -50,7 +122,11 @@ public class PublicationsController : ControllerBase
                 Description = "Maíz amarillo seco disponible para entrega inmediata.",
                 Price = 185.50m,
                 Stock = 120,
-                Unit = "quintal",
+                Unit = "Quintal",
+                Category = "Granos y cereales",
+                MinimumOrder = 10,
+                Department = "Guatemala",
+                Municipality = "Guatemala",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             },
@@ -62,7 +138,11 @@ public class PublicationsController : ControllerBase
                 Description = "Frijol negro seleccionado de producción nacional.",
                 Price = 430.00m,
                 Stock = 60,
-                Unit = "quintal",
+                Unit = "Quintal",
+                Category = "Granos y cereales",
+                MinimumOrder = 5,
+                Department = "Chiquimula",
+                Municipality = "Chiquimula",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             },
@@ -74,14 +154,17 @@ public class PublicationsController : ControllerBase
                 Description = "Café pergamino seco disponible por lote.",
                 Price = 950.00m,
                 Stock = 35,
-                Unit = "quintal",
+                Unit = "Quintal",
+                Category = "Café",
+                MinimumOrder = 5,
+                Department = "Huehuetenango",
+                Municipality = "Huehuetenango",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             }
         };
 
         _context.Publications.AddRange(demoPublications);
-
         await _context.SaveChangesAsync();
 
         return Created("", new
@@ -106,6 +189,10 @@ public class PublicationsController : ControllerBase
                 x.Price,
                 x.Stock,
                 x.Unit,
+                x.Category,
+                x.MinimumOrder,
+                x.Department,
+                x.Municipality,
                 x.CreatedAt,
                 Seller = new
                 {
@@ -132,6 +219,10 @@ public class PublicationsController : ControllerBase
                 x.Price,
                 x.Stock,
                 x.Unit,
+                x.Category,
+                x.MinimumOrder,
+                x.Department,
+                x.Municipality,
                 x.CreatedAt,
                 Seller = new
                 {

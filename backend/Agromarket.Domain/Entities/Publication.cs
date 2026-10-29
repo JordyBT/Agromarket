@@ -16,6 +16,14 @@ public class Publication
 
     public string Unit { get; set; } = string.Empty;
 
+    public string Category { get; set; } = string.Empty;
+
+    public int MinimumOrder { get; set; }
+
+    public string Department { get; set; } = string.Empty;
+
+    public string Municipality { get; set; } = string.Empty;
+
     public bool IsActive { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

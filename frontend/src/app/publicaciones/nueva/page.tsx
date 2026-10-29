@@ -11,6 +11,7 @@ import {
   Sprout,
   Wheat,
 } from "lucide-react";
+import { createPublication } from "@/services/publicationService";
 
 type FormData = {
   nombre: string;
@@ -43,6 +44,8 @@ export default function NuevaPublicacionPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [imageCount, setImageCount] = useState(0);
   const [success, setSuccess] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function updateField(field: keyof FormData, value: string) {
     setForm((current) => ({
@@ -56,6 +59,7 @@ export default function NuevaPublicacionPage() {
     }));
 
     setSuccess(false);
+    setServerError("");
   }
 
   function validateForm() {
@@ -126,14 +130,13 @@ export default function NuevaPublicacionPage() {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const isValid = validateForm();
+    setSuccess(false);
+    setServerError("");
 
-    if (!isValid) {
-      setSuccess(false);
-
+    if (!validateForm()) {
       window.scrollTo({
         top: 0,
         behavior: "smooth",
@@ -142,12 +145,43 @@ export default function NuevaPublicacionPage() {
       return;
     }
 
-    setSuccess(true);
+    setIsSubmitting(true);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    try {
+      await createPublication({
+        title: form.nombre.trim(),
+        description: form.descripcion.trim(),
+        price: Number(form.precio),
+        stock: Number(form.inventario),
+        unit: form.unidad,
+        category: form.categoria,
+        minimumOrder: Number(form.minimo),
+        department: form.departamento,
+        municipality: form.municipio.trim(),
+      });
+
+      setSuccess(true);
+      setForm(initialForm);
+      setImageCount(0);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (error) {
+      setServerError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo crear la publicación."
+      );
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -189,15 +223,25 @@ export default function NuevaPublicacionPage() {
 
             <div>
               <p className="font-semibold">
-                La publicación pasó todas las validaciones.
+                Publicación creada correctamente.
               </p>
 
               <p className="mt-1 text-sm leading-6 text-[#5e695f]">
-                Por ahora estamos simulando el registro. Cuando conectemos la
-                API, estos datos se enviarán al backend y se guardarán en la
-                base de datos.
+                El producto ya fue registrado y guardado en Agromarket.
               </p>
             </div>
+          </div>
+        )}
+
+        {serverError && (
+          <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 p-5">
+            <p className="font-semibold text-red-700">
+              No se pudo crear la publicación.
+            </p>
+
+            <p className="mt-1 text-sm text-red-600">
+              {serverError}
+            </p>
           </div>
         )}
 
@@ -593,7 +637,7 @@ export default function NuevaPublicacionPage() {
               </p>
 
               <p className="mt-1 text-xs text-[#7b827c]">
-                Selecciona imágenes del producto
+                La carga de fotografías se conectará posteriormente.
               </p>
 
               <label
@@ -641,9 +685,12 @@ export default function NuevaPublicacionPage() {
 
               <button
                 type="submit"
-                className="cursor-pointer rounded-full bg-[#173c29] px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-[#24583b] active:scale-[0.98]"
+                disabled={isSubmitting}
+                className="cursor-pointer rounded-full bg-[#173c29] px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-[#24583b] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Publicar producto
+                {isSubmitting
+                  ? "Publicando..."
+                  : "Publicar producto"}
               </button>
             </div>
           </div>

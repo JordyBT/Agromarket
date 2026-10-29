@@ -20,9 +20,6 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-
-        // USER
-
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(x => x.Id);
@@ -48,9 +45,6 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ROLE
-      
-
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasKey(x => x.Id);
@@ -62,10 +56,6 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(x => x.Name)
                 .IsUnique();
         });
-
-    
-        // USER PROFILE
-
 
         modelBuilder.Entity<UserProfile>(entity =>
         {
@@ -89,8 +79,6 @@ public class ApplicationDbContext : DbContext
                 .HasMaxLength(300);
         });
 
-        // PUBLICATION
-
         modelBuilder.Entity<Publication>(entity =>
         {
             entity.HasKey(x => x.Id);
@@ -110,15 +98,23 @@ public class ApplicationDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(30);
 
+            entity.Property(x => x.Category)
+                .IsRequired()
+                .HasMaxLength(80);
+
+            entity.Property(x => x.Department)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Municipality)
+                .IsRequired()
+                .HasMaxLength(100);
+
             entity.HasOne(x => x.User)
                 .WithMany(x => x.Publications)
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
-
-        
-        // DATOS INICIALES - ROLES
-        
 
         var compradorRoleId =
             Guid.Parse("11111111-1111-1111-1111-111111111111");

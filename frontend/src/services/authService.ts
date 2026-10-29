@@ -1,18 +1,5 @@
 import { apiRequest } from "@/services/api";
 
-export type LoginRequest = {
-  email: string;
-  password: string;
-};
-
-export type RegisterRequest = {
-  nombre: string;
-  apellido: string;
-  empresa: string;
-  email: string;
-  password: string;
-};
-
 export type AuthUser = {
   id: string;
   nombre: string;
@@ -22,24 +9,46 @@ export type AuthUser = {
   rol: string;
 };
 
-export type AuthResponse = {
-  token: string;
-  user: AuthUser;
+export type LoginRequest = {
+  email: string;
+  password: string;
 };
 
-export async function login(
-  data: LoginRequest
-): Promise<AuthResponse> {
-  return apiRequest<AuthResponse>("/api/auth/login", {
+export type LoginResponse = {
+  token: string;
+  expiresAt: string;
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+};
+
+export type RegisterRequest = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  role: "Comprador" | "Proveedor";
+  phone?: string | null;
+  companyName?: string | null;
+};
+
+export type RegisterResponse = {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+};
+
+export function login(data: LoginRequest) {
+  return apiRequest<LoginResponse>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify(data),
   });
 }
 
-export async function register(
-  data: RegisterRequest
-): Promise<AuthResponse> {
-  return apiRequest<AuthResponse>("/api/auth/register", {
+export function register(data: RegisterRequest) {
+  return apiRequest<RegisterResponse>("/api/auth/register", {
     method: "POST",
     body: JSON.stringify(data),
   });

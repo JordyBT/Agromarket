@@ -9,11 +9,17 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  LoaderCircle,
   Lock,
   Mail,
+  ShoppingBasket,
   Sprout,
+  Store,
   UserRound,
 } from "lucide-react";
+import { register } from "@/services/authService";
+
+type UserRole = "Comprador" | "Proveedor";
 
 type RegisterForm = {
   nombre: string;
@@ -22,6 +28,7 @@ type RegisterForm = {
   email: string;
   password: string;
   confirmPassword: string;
+  role: UserRole;
   terms: boolean;
 };
 
@@ -34,6 +41,7 @@ const initialForm: RegisterForm = {
   email: "",
   password: "",
   confirmPassword: "",
+  role: "Proveedor",
   terms: false,
 };
 
@@ -42,11 +50,14 @@ export default function RegistroPage() {
   const [errors, setErrors] = useState<RegisterErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [registeredName, setRegisteredName] = useState("");
 
   function updateField(
     field: keyof RegisterForm,
-    value: string | boolean
+    value: string | boolean,
   ) {
     setForm((current) => ({
       ...current,
@@ -59,6 +70,7 @@ export default function RegistroPage() {
     }));
 
     setSuccess(false);
+    setServerError("");
   }
 
   function validateForm() {
@@ -123,12 +135,10 @@ export default function RegistroPage() {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const isValid = validateForm();
-
-    if (!isValid) {
+    if (!validateForm()) {
       setSuccess(false);
 
       window.scrollTo({
@@ -139,12 +149,43 @@ export default function RegistroPage() {
       return;
     }
 
-    setSuccess(true);
+    setIsSubmitting(true);
+    setServerError("");
+    setSuccess(false);
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    try {
+      const result = await register({
+        email: form.email.trim(),
+        password: form.password,
+        firstName: form.nombre.trim(),
+        lastName: form.apellido.trim(),
+        role: form.role,
+        companyName: form.empresa.trim(),
+        phone: null,
+      });
+
+      setRegisteredName(result.fullName);
+      setSuccess(true);
+      setForm(initialForm);
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } catch (error) {
+      setServerError(
+        error instanceof Error
+          ? error.message
+          : "No fue posible crear la cuenta.",
+      );
+
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -155,7 +196,6 @@ export default function RegistroPage() {
             <div className="absolute left-[20%] top-0 h-full w-px bg-white" />
             <div className="absolute left-[50%] top-0 h-full w-px bg-white" />
             <div className="absolute left-[80%] top-0 h-full w-px bg-white" />
-
             <div className="absolute left-0 top-[20%] h-px w-full bg-white" />
             <div className="absolute left-0 top-[50%] h-px w-full bg-white" />
             <div className="absolute left-0 top-[80%] h-px w-full bg-white" />
@@ -171,7 +211,6 @@ export default function RegistroPage() {
                 <p className="text-xl font-semibold tracking-[-0.04em]">
                   Agromarket
                 </p>
-
                 <p className="text-[11px] uppercase tracking-[0.18em] text-white/55">
                   Comercio agrícola B2B
                 </p>
@@ -181,33 +220,31 @@ export default function RegistroPage() {
 
           <div className="relative z-10 px-10 pb-10 xl:px-14 xl:pb-14">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b9c995]">
-              Una sola cuenta
+              Una sola plataforma
             </p>
 
             <h1 className="mt-5 max-w-xl text-5xl font-semibold leading-[1.02] tracking-[-0.05em] xl:text-6xl">
-              Compra, vende y haz crecer{" "}
+              Conecta tu negocio con{" "}
               <span className="text-[#b9c995]">
-                tu red comercial.
+                el mercado agrícola.
               </span>
             </h1>
 
             <p className="mt-6 max-w-md text-base leading-7 text-white/60">
-              Crea tu perfil para acceder al mercado, contactar proveedores
-              y administrar tus operaciones dentro de la plataforma.
+              Crea tu cuenta para comprar productos, publicar tu oferta y
+              construir relaciones comerciales dentro de Agromarket.
             </p>
 
             <div className="mt-12 grid grid-cols-3 gap-5 border-t border-white/15 pt-6">
               <div>
                 <p className="text-xl font-semibold">01</p>
-
                 <p className="mt-2 text-xs leading-5 text-white/50">
-                  Crea tu cuenta
+                  Registra tu cuenta
                 </p>
               </div>
 
               <div>
                 <p className="text-xl font-semibold">02</p>
-
                 <p className="mt-2 text-xs leading-5 text-white/50">
                   Completa tu perfil
                 </p>
@@ -215,7 +252,6 @@ export default function RegistroPage() {
 
               <div>
                 <p className="text-xl font-semibold">03</p>
-
                 <p className="mt-2 text-xs leading-5 text-white/50">
                   Entra al mercado
                 </p>
@@ -252,23 +288,29 @@ export default function RegistroPage() {
 
                   <div>
                     <p className="font-semibold">
-                      Tus datos son válidos.
+                      Cuenta creada correctamente.
                     </p>
 
                     <p className="mt-1 text-sm leading-6 text-[#5e695f]">
-                      El registro está listo para conectarse con la API.
-                      Por ahora no se ha creado una cuenta en la base de
-                      datos.
+                      {registeredName
+                        ? `${registeredName}, tu cuenta ya está registrada en Agromarket.`
+                        : "Tu cuenta ya está registrada en Agromarket."}
                     </p>
 
                     <Link
                       href="/login"
                       className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[#173c29] hover:underline"
                     >
-                      Ir a iniciar sesión
+                      Iniciar sesión
                       <ArrowRight size={15} />
                     </Link>
                   </div>
+                </div>
+              )}
+
+              {serverError && (
+                <div className="mb-7 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-700">
+                  {serverError}
                 </div>
               )}
 
@@ -286,8 +328,8 @@ export default function RegistroPage() {
                 </h2>
 
                 <p className="mt-3 max-w-xl text-sm leading-6 text-[#697169]">
-                  Ingresa tus datos principales. Después podrás completar
-                  la información comercial de tu perfil.
+                  Ingresa tus datos y selecciona cómo utilizarás principalmente
+                  la plataforma.
                 </p>
               </div>
 
@@ -296,6 +338,60 @@ export default function RegistroPage() {
                 noValidate
                 className="space-y-5"
               >
+                <div>
+                  <p className="mb-3 text-sm font-semibold">
+                    Tipo de cuenta
+                  </p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => updateField("role", "Proveedor")}
+                      className={`flex items-start gap-4 rounded-xl border p-4 text-left transition ${
+                        form.role === "Proveedor"
+                          ? "border-[#183f2a] bg-[#e8ede3]"
+                          : "border-[#172019]/15 bg-[#fffdf7] hover:border-[#183f2a]/40"
+                      }`}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#183f2a] text-white">
+                        <Store size={18} />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Proveedor
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-[#697169]">
+                          Quiero publicar y vender productos.
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => updateField("role", "Comprador")}
+                      className={`flex items-start gap-4 rounded-xl border p-4 text-left transition ${
+                        form.role === "Comprador"
+                          ? "border-[#183f2a] bg-[#e8ede3]"
+                          : "border-[#172019]/15 bg-[#fffdf7] hover:border-[#183f2a]/40"
+                      }`}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#183f2a] text-white">
+                        <ShoppingBasket size={18} />
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Comprador
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-[#697169]">
+                          Quiero encontrar y comprar productos.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid gap-5 sm:grid-cols-2">
                   <div>
                     <label
@@ -319,7 +415,6 @@ export default function RegistroPage() {
 
                       <input
                         id="nombre"
-                        name="nombre"
                         type="text"
                         autoComplete="given-name"
                         value={form.nombre}
@@ -360,7 +455,6 @@ export default function RegistroPage() {
 
                       <input
                         id="apellido"
-                        name="apellido"
                         type="text"
                         autoComplete="family-name"
                         value={form.apellido}
@@ -402,7 +496,6 @@ export default function RegistroPage() {
 
                     <input
                       id="empresa"
-                      name="empresa"
                       type="text"
                       value={form.empresa}
                       onChange={(event) =>
@@ -419,8 +512,8 @@ export default function RegistroPage() {
                     </p>
                   ) : (
                     <p className="mt-2 text-xs text-[#858c86]">
-                      Si trabajas de forma independiente, puedes utilizar
-                      tu nombre.
+                      Si trabajas de forma independiente, puedes utilizar tu
+                      nombre.
                     </p>
                   )}
                 </div>
@@ -447,7 +540,6 @@ export default function RegistroPage() {
 
                     <input
                       id="email"
-                      name="email"
                       type="email"
                       autoComplete="email"
                       value={form.email}
@@ -489,7 +581,6 @@ export default function RegistroPage() {
 
                       <input
                         id="password"
-                        name="password"
                         type={showPassword ? "text" : "password"}
                         autoComplete="new-password"
                         value={form.password}
@@ -553,7 +644,6 @@ export default function RegistroPage() {
 
                       <input
                         id="confirmPassword"
-                        name="confirmPassword"
                         type={
                           showConfirmPassword ? "text" : "password"
                         }
@@ -562,7 +652,7 @@ export default function RegistroPage() {
                         onChange={(event) =>
                           updateField(
                             "confirmPassword",
-                            event.target.value
+                            event.target.value,
                           )
                         }
                         placeholder="Repite tu contraseña"
@@ -573,7 +663,7 @@ export default function RegistroPage() {
                         type="button"
                         onClick={() =>
                           setShowConfirmPassword(
-                            (current) => !current
+                            (current) => !current,
                           )
                         }
                         className="shrink-0 text-[#747d75] transition hover:text-[#173c29]"
@@ -611,8 +701,8 @@ export default function RegistroPage() {
                     />
 
                     <span className="text-sm leading-6 text-[#626b63]">
-                      Acepto los términos de uso y las políticas de
-                      privacidad de la plataforma.
+                      Acepto los términos de uso y las políticas de privacidad
+                      de la plataforma.
                     </span>
                   </label>
 
@@ -625,14 +715,26 @@ export default function RegistroPage() {
 
                 <button
                   type="submit"
-                  className="group flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl bg-[#183f2a] px-6 py-4 text-sm font-semibold text-white transition-colors hover:bg-[#24583b] active:scale-[0.99]"
+                  disabled={isSubmitting}
+                  className="group flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl bg-[#183f2a] px-6 py-4 text-sm font-semibold text-white transition-colors hover:bg-[#24583b] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Crear mi cuenta
-
-                  <ArrowRight
-                    size={17}
-                    className="transition-transform group-hover:translate-x-1"
-                  />
+                  {isSubmitting ? (
+                    <>
+                      <LoaderCircle
+                        size={18}
+                        className="animate-spin"
+                      />
+                      Creando cuenta
+                    </>
+                  ) : (
+                    <>
+                      Crear mi cuenta
+                      <ArrowRight
+                        size={17}
+                        className="transition-transform group-hover:translate-x-1"
+                      />
+                    </>
+                  )}
                 </button>
               </form>
 
