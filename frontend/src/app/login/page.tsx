@@ -15,6 +15,7 @@ import {
   Sprout,
 } from "lucide-react";
 
+import { login } from "@/services/authService";
 import { saveSession } from "@/services/sessionService";
 
 type LoginForm = {
@@ -38,6 +39,7 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<LoginErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [serverError, setServerError] = useState("");
 
   function updateField(
     field: keyof LoginForm,
@@ -52,6 +54,8 @@ export default function LoginPage() {
       ...current,
       [field]: undefined,
     }));
+
+    setServerError("");
   }
 
   function validateForm() {
@@ -80,7 +84,9 @@ export default function LoginPage() {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     if (!validateForm()) {
@@ -88,29 +94,43 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
+    setServerError("");
 
-    window.setTimeout(() => {
-      /*
-       * Esta sesión es temporal mientras el backend
-       * de autenticación todavía no está conectado.
-       *
-       * Después reemplazaremos estos datos por la
-       * respuesta real de ASP.NET Core.
-       */
+    try {
+      const response = await login({
+        email: form.email.trim(),
+        password: form.password,
+      });
+
+      const nameParts = response.fullName
+        .trim()
+        .split(/\s+/);
+
+      const nombre = nameParts[0] ?? "";
+      const apellido = nameParts.slice(1).join(" ");
+
       saveSession({
-        token: "token-desarrollo-agromarket",
+        token: response.token,
         user: {
-          id: "1",
-          nombre: "Carlos",
-          apellido: "López",
-          email: form.email.trim(),
-          empresa: "Agro Oriente",
-          rol: "Proveedor",
+          id: response.userId,
+          nombre,
+          apellido,
+          email: response.email,
+          empresa: "",
+          rol: response.role,
         },
       });
 
       router.push("/dashboard");
-    }, 1000);
+    } catch (error) {
+      setServerError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo iniciar sesión."
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -231,6 +251,14 @@ export default function LoginPage() {
                 </p>
               </div>
 
+              {serverError && (
+                <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+                  <p className="text-sm font-medium text-red-700">
+                    {serverError}
+                  </p>
+                </div>
+              )}
+
               <form
                 onSubmit={handleSubmit}
                 noValidate
@@ -314,7 +342,10 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       value={form.password}
                       onChange={(event) =>
-                        updateField("password", event.target.value)
+                        updateField(
+                          "password",
+                          event.target.value
+                        )
                       }
                       placeholder="Ingresa tu contraseña"
                       disabled={isLoading}
@@ -324,7 +355,9 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        setShowPassword((current) => !current)
+                        setShowPassword(
+                          (current) => !current
+                        )
                       }
                       disabled={isLoading}
                       className="shrink-0 text-[#747d75] transition hover:text-[#173c29] disabled:cursor-not-allowed"
@@ -408,14 +441,12 @@ export default function LoginPage() {
 
               <div className="mt-10 rounded-2xl border border-[#172019]/10 bg-[#e8e6da]/60 p-4">
                 <p className="text-xs font-semibold text-[#4f6454]">
-                  Modo de desarrollo
+                  Acceso seguro
                 </p>
 
                 <p className="mt-2 text-xs leading-5 text-[#747c75]">
-                  Por ahora cualquier correo válido y una contraseña de al
-                  menos 8 caracteres permiten continuar. Cuando conectemos
-                  ASP.NET Core, estas credenciales serán verificadas por el
-                  servidor.
+                  Tus credenciales se verifican mediante la API de Agromarket y
+                  la sesión utiliza autenticación JWT.
                 </p>
               </div>
             </div>
