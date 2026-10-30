@@ -10,7 +10,8 @@ public class User
 
     public bool IsActive { get; set; } = true;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
+        = DateTime.UtcNow;
 
     public Guid RoleId { get; set; }
 
@@ -23,4 +24,7 @@ public class User
 
     public ICollection<Reservation> ReservationsAsBuyer { get; set; }
         = new List<Reservation>();
+
+    public ICollection<Favorite> Favorites { get; set; }
+        = new List<Favorite>();
 }

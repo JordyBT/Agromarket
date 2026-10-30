@@ -16,8 +16,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
     public DbSet<Publication> Publications => Set<Publication>();
     public DbSet<Reservation> Reservations => Set<Reservation>();
+    public DbSet<Favorite> Favorites => Set<Favorite>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(
+        ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
@@ -111,6 +113,9 @@ public class ApplicationDbContext : DbContext
                 .IsRequired()
                 .HasMaxLength(100);
 
+            entity.Property(x => x.ImageUrl)
+                .HasMaxLength(1000);
+
             entity.HasOne(x => x.User)
                 .WithMany(x => x.Publications)
                 .HasForeignKey(x => x.UserId)
@@ -147,14 +152,46 @@ public class ApplicationDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<Favorite>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasIndex(x => x.UserId);
+
+            entity.HasIndex(x => x.PublicationId);
+
+            entity.HasIndex(x => new
+            {
+                x.UserId,
+                x.PublicationId
+            })
+            .IsUnique();
+
+            entity.HasOne(x => x.User)
+                .WithMany(x => x.Favorites)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Publication)
+                .WithMany(x => x.Favorites)
+                .HasForeignKey(x => x.PublicationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         var compradorRoleId =
-            Guid.Parse("11111111-1111-1111-1111-111111111111");
+            Guid.Parse(
+                "11111111-1111-1111-1111-111111111111"
+            );
 
         var proveedorRoleId =
-            Guid.Parse("22222222-2222-2222-2222-222222222222");
+            Guid.Parse(
+                "22222222-2222-2222-2222-222222222222"
+            );
 
         var administradorRoleId =
-            Guid.Parse("33333333-3333-3333-3333-333333333333");
+            Guid.Parse(
+                "33333333-3333-3333-3333-333333333333"
+            );
 
         modelBuilder.Entity<Role>().HasData(
             new Role
@@ -162,24 +199,42 @@ public class ApplicationDbContext : DbContext
                 Id = compradorRoleId,
                 Name = "Comprador",
                 CreatedAt = new DateTime(
-                    2026, 9, 30, 0, 0, 0,
-                    DateTimeKind.Utc)
+                    2026,
+                    9,
+                    30,
+                    0,
+                    0,
+                    0,
+                    DateTimeKind.Utc
+                )
             },
             new Role
             {
                 Id = proveedorRoleId,
                 Name = "Proveedor",
                 CreatedAt = new DateTime(
-                    2026, 9, 30, 0, 0, 0,
-                    DateTimeKind.Utc)
+                    2026,
+                    9,
+                    30,
+                    0,
+                    0,
+                    0,
+                    DateTimeKind.Utc
+                )
             },
             new Role
             {
                 Id = administradorRoleId,
                 Name = "Administrador",
                 CreatedAt = new DateTime(
-                    2026, 9, 30, 0, 0, 0,
-                    DateTimeKind.Utc)
+                    2026,
+                    9,
+                    30,
+                    0,
+                    0,
+                    0,
+                    DateTimeKind.Utc
+                )
             }
         );
     }

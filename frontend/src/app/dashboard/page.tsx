@@ -69,14 +69,6 @@ function getIcon(category: string): LucideIcon {
   return Leaf;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-GT", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -107,7 +99,9 @@ export default function DashboardPage() {
       return;
     }
 
-    setUser(currentUser);
+    const authenticatedUser = currentUser;
+
+    setUser(authenticatedUser);
 
     async function loadDashboard() {
       try {
@@ -115,9 +109,12 @@ export default function DashboardPage() {
         setError("");
 
         const market = await getPublications();
+
         setMarketProducts(market);
 
-        if (currentUser.rol === "Proveedor") {
+        if (
+          authenticatedUser.rol === "Proveedor"
+        ) {
           const [mine, received] =
             await Promise.all([
               getMyPublications(),
@@ -127,7 +124,7 @@ export default function DashboardPage() {
           setPublications(mine);
           setReservations(received);
         } else if (
-          currentUser.rol === "Comprador"
+          authenticatedUser.rol === "Comprador"
         ) {
           const mine =
             await getMyReservations();
@@ -153,13 +150,16 @@ export default function DashboardPage() {
     router.replace("/login");
   }
 
-  const isProvider = user?.rol === "Proveedor";
-  const isBuyer = user?.rol === "Comprador";
+  const isProvider =
+    user?.rol === "Proveedor";
+
+  const isBuyer =
+    user?.rol === "Comprador";
 
   const initials = user
-    ? `${user.nombre.charAt(0)}${user.apellido.charAt(
+    ? `${user.nombre.charAt(
         0
-      )}`.toUpperCase()
+      )}${user.apellido.charAt(0)}`.toUpperCase()
     : "AG";
 
   const providerStats = useMemo(() => {
@@ -213,7 +213,8 @@ export default function DashboardPage() {
       {
         label: "Inventario registrado",
         value: stock.toString(),
-        detail: "Unidades entre tus publicaciones",
+        detail:
+          "Unidades entre tus publicaciones",
         icon: ShoppingBasket,
         href: "/publicaciones",
       },
@@ -252,7 +253,8 @@ export default function DashboardPage() {
       {
         label: "Reservas pendientes",
         value: pending.toString(),
-        detail: "Esperando respuesta del proveedor",
+        detail:
+          "Esperando respuesta del proveedor",
         icon: Clock3,
         href: "/reservas",
       },
@@ -273,7 +275,8 @@ export default function DashboardPage() {
       {
         label: "Total aceptado",
         value: formatPrice(acceptedTotal),
-        detail: "Valor de reservas aceptadas",
+        detail:
+          "Valor de reservas aceptadas",
         icon: Store,
         href: "/reservas",
       },
@@ -284,12 +287,11 @@ export default function DashboardPage() {
     ? providerStats
     : buyerStats;
 
-  const recentReservations = reservations.slice(
-    0,
-    4
-  );
+  const recentReservations =
+    reservations.slice(0, 4);
 
-  const opportunities = marketProducts.slice(0, 3);
+  const opportunities =
+    marketProducts.slice(0, 3);
 
   const navigation = [
     {
@@ -393,6 +395,7 @@ export default function DashboardPage() {
                       size={18}
                       strokeWidth={1.8}
                     />
+
                     {item.name}
                   </Link>
                 );
@@ -417,7 +420,8 @@ export default function DashboardPage() {
 
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">
-                      {user.nombre} {user.apellido}
+                      {user.empresa ||
+                        `${user.nombre} ${user.apellido}`}
                     </p>
 
                     <p className="truncate text-xs text-white/45">
@@ -610,10 +614,12 @@ export default function DashboardPage() {
                       </Link>
                     </div>
 
-                    {recentReservations.length === 0 ? (
+                    {recentReservations.length ===
+                    0 ? (
                       <div className="flex min-h-72 items-center justify-center px-6 text-center">
                         <p className="max-w-md text-sm text-[#747c75]">
-                          Todavía no hay reservas para mostrar.
+                          Todavía no hay reservas para
+                          mostrar.
                         </p>
                       </div>
                     ) : (
@@ -639,8 +645,12 @@ export default function DashboardPage() {
                                     </p>
 
                                     <p className="mt-1 text-sm text-[#687069]">
-                                      {reservation.quantity}{" "}
-                                      {reservation.unit ?? ""} ·{" "}
+                                      {
+                                        reservation.quantity
+                                      }{" "}
+                                      {reservation.unit ??
+                                        ""}{" "}
+                                      ·{" "}
                                       {formatPrice(
                                         reservation.totalPrice
                                       )}
@@ -648,7 +658,9 @@ export default function DashboardPage() {
                                   </div>
 
                                   <div className="text-xs text-[#8a908a]">
-                                    {reservation.status}
+                                    {
+                                      reservation.status
+                                    }
                                   </div>
                                 </div>
                               </div>
@@ -678,7 +690,8 @@ export default function DashboardPage() {
 
                     <div className="mt-8 border-t border-white/15 pt-5">
                       <p className="text-xs text-white/45">
-                        Datos actualizados desde Agromarket
+                        Datos actualizados desde
+                        Agromarket
                       </p>
                     </div>
                   </article>
@@ -725,7 +738,8 @@ export default function DashboardPage() {
                               href={`/productos/${product.id}`}
                               className={`p-5 transition-colors hover:bg-[#f3f1e8] sm:p-6 ${
                                 index !==
-                                opportunities.length - 1
+                                opportunities.length -
+                                  1
                                   ? "border-b border-[#172019]/10 lg:border-b-0 lg:border-r"
                                   : ""
                               }`}
@@ -740,7 +754,10 @@ export default function DashboardPage() {
                               <div className="mt-7 flex items-center gap-1.5 text-xs text-[#757d76]">
                                 <MapPin size={13} />
 
-                                {product.municipality},{" "}
+                                {
+                                  product.municipality
+                                }
+                                ,{" "}
                                 {product.department}
                               </div>
 
@@ -787,7 +804,9 @@ export default function DashboardPage() {
                   >
                     <div className="flex items-center gap-4">
                       <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#173c29] text-white">
-                        <CircleUserRound size={19} />
+                        <CircleUserRound
+                          size={19}
+                        />
                       </div>
 
                       <div>
@@ -796,7 +815,8 @@ export default function DashboardPage() {
                         </p>
 
                         <p className="mt-1 text-xs text-[#6d746e]">
-                          Revisa tu información comercial.
+                          Revisa tu información
+                          comercial.
                         </p>
                       </div>
                     </div>
@@ -841,7 +861,8 @@ export default function DashboardPage() {
                 </section>
 
                 <footer className="mt-10 border-t border-[#172019]/10 pt-6 text-xs text-[#818781]">
-                  Agromarket · Marketplace agrícola B2B
+                  Agromarket · Marketplace agrícola
+                  B2B
                 </footer>
               </>
             )}

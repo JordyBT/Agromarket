@@ -12,7 +12,11 @@ namespace Agromarket.Api.Controllers;
 [Route("api/[controller]")]
 public class PublicationsController : ControllerBase
 {
-    private const long MaxImageSize = 5 * 1024 * 1024;
+    private readonly ApplicationDbContext _context;
+    private readonly IWebHostEnvironment _environment;
+
+    private const long MaxImageSize =
+        5 * 1024 * 1024;
 
     private static readonly string[] AllowedImageExtensions =
     [
@@ -29,9 +33,6 @@ public class PublicationsController : ControllerBase
         "image/webp"
     ];
 
-    private readonly ApplicationDbContext _context;
-    private readonly IWebHostEnvironment _environment;
-
     public PublicationsController(
         ApplicationDbContext context,
         IWebHostEnvironment environment)
@@ -40,270 +41,16 @@ public class PublicationsController : ControllerBase
         _environment = environment;
     }
 
-    [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpPost]
-    public async Task<IActionResult> Create(
-        CreatePublicationRequest request)
+    [HttpGet]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetAll()
     {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(userIdValue, out var userId))
-        {
-            return Unauthorized();
-        }
-
-        if (request.MinimumOrder > request.Stock)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "La compra mínima no puede superar el inventario disponible."
-            });
-        }
-
-        var userExists = await _context.Users
-            .AnyAsync(x =>
-                x.Id == userId &&
-                x.IsActive);
-
-        if (!userExists)
-        {
-            return NotFound(new
-            {
-                message = "Usuario no encontrado."
-            });
-        }
-
-        var publication = new Publication
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Title = request.Title.Trim(),
-            Description = request.Description.Trim(),
-            Price = request.Price,
-            Stock = request.Stock,
-            Unit = request.Unit.Trim(),
-            Category = request.Category.Trim(),
-            MinimumOrder = request.MinimumOrder,
-            Department = request.Department.Trim(),
-            Municipality = request.Municipality.Trim(),
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Publications.Add(publication);
-
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(
-            nameof(GetById),
-            new { id = publication.Id },
-            ToResponse(publication)
-        );
-    }
-
-    [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpPost("{id:guid}/image")]
-    [Consumes("multipart/form-data")]
-    public async Task<IActionResult> UploadImage(
-        Guid id,
-        [FromForm] IFormFile image)
-    {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(userIdValue, out var userId))
-        {
-            return Unauthorized();
-        }
-
-        var publication =
-            await _context.Publications
-                .FirstOrDefaultAsync(x =>
-                    x.Id == id &&
-                    x.UserId == userId);
-
-        if (publication is null)
-        {
-            return NotFound(new
-            {
-                message = "Publicación no encontrada."
-            });
-        }
-
-        if (image is null || image.Length == 0)
-        {
-            return BadRequest(new
-            {
-                message = "Selecciona una imagen."
-            });
-        }
-
-        if (image.Length > MaxImageSize)
-        {
-            return BadRequest(new
-            {
-                message =
-                    "La imagen no puede superar los 5 MB."
-            });
-        }
-
-        var extension =
-            Path.GetExtension(image.FileName)
-                .ToLowerInvariant();
-
-        if (!AllowedImageExtensions.Contains(extension))
-        {
-            return BadRequest(new
-            {
-                message =
-                    "Formato no permitido. Utiliza JPG, PNG o WEBP."
-            });
-        }
-
-        if (
-            string.IsNullOrWhiteSpace(image.ContentType) ||
-            !AllowedImageContentTypes.Contains(
-                image.ContentType.ToLowerInvariant()
-            )
-        )
-        {
-            return BadRequest(new
-            {
-                message =
-                    "El archivo seleccionado no es una imagen válida."
-            });
-        }
-
-        var webRoot =
-            _environment.WebRootPath
-            ?? Path.Combine(
-                _environment.ContentRootPath,
-                "wwwroot"
-            );
-
-        var uploadsDirectory =
-            Path.Combine(
-                webRoot,
-                "uploads",
-                "publications"
-            );
-
-        Directory.CreateDirectory(uploadsDirectory);
-
-        var fileName =
-            $"{Guid.NewGuid():N}{extension}";
-
-        var filePath =
-            Path.Combine(
-                uploadsDirectory,
-                fileName
-            );
-
-        await using (var stream =
-            new FileStream(
-                filePath,
-                FileMode.Create))
-        {
-            await image.CopyToAsync(stream);
-        }
-
-        DeleteLocalImageIfExists(
-            publication.ImageUrl,
-            uploadsDirectory
-        );
-
-        publication.ImageUrl =
-            $"{Request.Scheme}://{Request.Host}/uploads/publications/{fileName}";
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            publication.Id,
-            publication.ImageUrl
-        });
-    }
-
-    [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpDelete("{id:guid}/image")]
-    public async Task<IActionResult> DeleteImage(
-        Guid id)
-    {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(userIdValue, out var userId))
-        {
-            return Unauthorized();
-        }
-
-        var publication =
-            await _context.Publications
-                .FirstOrDefaultAsync(x =>
-                    x.Id == id &&
-                    x.UserId == userId);
-
-        if (publication is null)
-        {
-            return NotFound(new
-            {
-                message = "Publicación no encontrada."
-            });
-        }
-
-        if (
-            string.IsNullOrWhiteSpace(
-                publication.ImageUrl)
-        )
-        {
-            return NoContent();
-        }
-
-        var webRoot =
-            _environment.WebRootPath
-            ?? Path.Combine(
-                _environment.ContentRootPath,
-                "wwwroot"
-            );
-
-        var uploadsDirectory =
-            Path.Combine(
-                webRoot,
-                "uploads",
-                "publications"
-            );
-
-        DeleteLocalImageIfExists(
-            publication.ImageUrl,
-            uploadsDirectory
-        );
-
-        publication.ImageUrl = null;
-
-        await _context.SaveChangesAsync();
-
-        return NoContent();
-    }
-
-    [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpGet("mine")]
-    public async Task<IActionResult> GetMine()
-    {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(userIdValue, out var userId))
-        {
-            return Unauthorized();
-        }
-
         var publications =
             await _context.Publications
                 .AsNoTracking()
                 .Where(x =>
-                    x.UserId == userId)
+                    x.IsActive &&
+                    x.Stock > 0)
                 .OrderByDescending(x =>
                     x.CreatedAt)
                 .Select(x => new
@@ -320,32 +67,31 @@ public class PublicationsController : ControllerBase
                     x.Municipality,
                     x.ImageUrl,
                     x.IsActive,
-                    x.CreatedAt
+                    x.CreatedAt,
+
+                    Seller = new
+                    {
+                        x.User.Id,
+                        x.User.Email
+                    }
                 })
                 .ToListAsync();
 
         return Ok(publications);
     }
 
-    [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpGet("mine/{id:guid}")]
-    public async Task<IActionResult> GetMineById(
+    [HttpGet("{id:guid}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetById(
         Guid id)
     {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        if (!Guid.TryParse(userIdValue, out var userId))
-        {
-            return Unauthorized();
-        }
-
         var publication =
             await _context.Publications
                 .AsNoTracking()
                 .Where(x =>
                     x.Id == id &&
-                    x.UserId == userId)
+                    x.IsActive &&
+                    x.Stock > 0)
                 .Select(x => new
                 {
                     x.Id,
@@ -360,7 +106,116 @@ public class PublicationsController : ControllerBase
                     x.Municipality,
                     x.ImageUrl,
                     x.IsActive,
-                    x.CreatedAt
+                    x.CreatedAt,
+
+                    Seller = new
+                    {
+                        x.User.Id,
+                        x.User.Email
+                    }
+                })
+                .FirstOrDefaultAsync();
+
+        if (publication is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Publicación no encontrada o no disponible."
+            });
+        }
+
+        return Ok(publication);
+    }
+
+    [HttpGet("mine")]
+    [Authorize(Roles = "Proveedor,Administrador")]
+    public async Task<IActionResult> GetMine()
+    {
+        var userId =
+            GetCurrentUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var publications =
+            await _context.Publications
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId ==
+                    userId.Value)
+                .OrderByDescending(x =>
+                    x.CreatedAt)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Title,
+                    x.Description,
+                    x.Price,
+                    x.Stock,
+                    x.Unit,
+                    x.Category,
+                    x.MinimumOrder,
+                    x.Department,
+                    x.Municipality,
+                    x.ImageUrl,
+                    x.IsActive,
+                    x.CreatedAt,
+
+                    Seller = new
+                    {
+                        x.User.Id,
+                        x.User.Email
+                    }
+                })
+                .ToListAsync();
+
+        return Ok(publications);
+    }
+
+    [HttpGet("mine/{id:guid}")]
+    [Authorize(Roles = "Proveedor,Administrador")]
+    public async Task<IActionResult> GetMineById(
+        Guid id)
+    {
+        var userId =
+            GetCurrentUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var publication =
+            await _context.Publications
+                .AsNoTracking()
+                .Where(x =>
+                    x.Id == id &&
+                    x.UserId ==
+                    userId.Value)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.Title,
+                    x.Description,
+                    x.Price,
+                    x.Stock,
+                    x.Unit,
+                    x.Category,
+                    x.MinimumOrder,
+                    x.Department,
+                    x.Municipality,
+                    x.ImageUrl,
+                    x.IsActive,
+                    x.CreatedAt,
+
+                    Seller = new
+                    {
+                        x.User.Id,
+                        x.User.Email
+                    }
                 })
                 .FirstOrDefaultAsync();
 
@@ -376,24 +231,50 @@ public class PublicationsController : ControllerBase
         return Ok(publication);
     }
 
+    [HttpPost]
     [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Update(
-        Guid id,
-        UpdatePublicationRequest request)
+    public async Task<IActionResult> Create(
+        CreatePublicationRequest request)
     {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            GetCurrentUserId();
 
-        if (!Guid.TryParse(userIdValue, out var userId))
+        if (userId is null)
         {
             return Unauthorized();
         }
 
+        if (request.Price <= 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "El precio debe ser mayor que cero."
+            });
+        }
+
+        if (request.Stock < 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "El inventario no puede ser negativo."
+            });
+        }
+
+        if (request.MinimumOrder <= 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "La compra mínima debe ser mayor que cero."
+            });
+        }
+
         if (
             request.Stock > 0 &&
-            request.MinimumOrder > request.Stock
-        )
+            request.MinimumOrder >
+            request.Stock)
         {
             return BadRequest(new
             {
@@ -402,11 +283,87 @@ public class PublicationsController : ControllerBase
             });
         }
 
+        var user =
+            await _context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id ==
+                    userId.Value &&
+                    x.IsActive);
+
+        if (user is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Usuario no encontrado."
+            });
+        }
+
+        var publication =
+            new Publication
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId.Value,
+                Title = request.Title.Trim(),
+                Description =
+                    request.Description.Trim(),
+                Price = request.Price,
+                Stock = request.Stock,
+                Unit = request.Unit.Trim(),
+                Category =
+                    request.Category.Trim(),
+                MinimumOrder =
+                    request.MinimumOrder,
+                Department =
+                    request.Department.Trim(),
+                Municipality =
+                    request.Municipality.Trim(),
+                ImageUrl = null,
+                IsActive =
+                    request.Stock > 0,
+                CreatedAt =
+                    DateTime.UtcNow
+            };
+
+        _context.Publications.Add(
+            publication
+        );
+
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(
+            nameof(GetById),
+            new
+            {
+                id = publication.Id
+            },
+            ToResponse(
+                publication,
+                user.Email)
+        );
+    }
+
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Proveedor,Administrador")]
+    public async Task<IActionResult> Update(
+        Guid id,
+        UpdatePublicationRequest request)
+    {
+        var userId =
+            GetCurrentUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
         var publication =
             await _context.Publications
                 .FirstOrDefaultAsync(x =>
                     x.Id == id &&
-                    x.UserId == userId);
+                    x.UserId ==
+                    userId.Value);
 
         if (publication is null)
         {
@@ -414,6 +371,45 @@ public class PublicationsController : ControllerBase
             {
                 message =
                     "Publicación no encontrada."
+            });
+        }
+
+        if (request.Price <= 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "El precio debe ser mayor que cero."
+            });
+        }
+
+        if (request.Stock < 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "El inventario no puede ser negativo."
+            });
+        }
+
+        if (request.MinimumOrder <= 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "La compra mínima debe ser mayor que cero."
+            });
+        }
+
+        if (
+            request.Stock > 0 &&
+            request.MinimumOrder >
+            request.Stock)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "La compra mínima no puede superar el inventario disponible."
             });
         }
 
@@ -446,26 +442,37 @@ public class PublicationsController : ControllerBase
 
         if (publication.Stock == 0)
         {
-            publication.IsActive = false;
+            publication.IsActive =
+                false;
         }
 
         await _context.SaveChangesAsync();
 
+        var email =
+            await _context.Users
+                .Where(x =>
+                    x.Id ==
+                    publication.UserId)
+                .Select(x => x.Email)
+                .FirstOrDefaultAsync();
+
         return Ok(
-            ToResponse(publication)
+            ToResponse(
+                publication,
+                email)
         );
     }
 
-    [Authorize(Roles = "Proveedor,Administrador")]
     [HttpPatch("{id:guid}/status/{isActive:bool}")]
+    [Authorize(Roles = "Proveedor,Administrador")]
     public async Task<IActionResult> UpdateStatus(
         Guid id,
         bool isActive)
     {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            GetCurrentUserId();
 
-        if (!Guid.TryParse(userIdValue, out var userId))
+        if (userId is null)
         {
             return Unauthorized();
         }
@@ -474,7 +481,8 @@ public class PublicationsController : ControllerBase
             await _context.Publications
                 .FirstOrDefaultAsync(x =>
                     x.Id == id &&
-                    x.UserId == userId);
+                    x.UserId ==
+                    userId.Value);
 
         if (publication is null)
         {
@@ -487,8 +495,7 @@ public class PublicationsController : ControllerBase
 
         if (
             isActive &&
-            publication.Stock <= 0
-        )
+            publication.Stock <= 0)
         {
             return BadRequest(new
             {
@@ -497,7 +504,8 @@ public class PublicationsController : ControllerBase
             });
         }
 
-        publication.IsActive = isActive;
+        publication.IsActive =
+            isActive;
 
         await _context.SaveChangesAsync();
 
@@ -509,182 +517,27 @@ public class PublicationsController : ControllerBase
         });
     }
 
+    [HttpPost("{id:guid}/image")]
     [Authorize(Roles = "Proveedor,Administrador")]
-    [HttpPost("demo")]
-    public async Task<IActionResult>
-        CreateDemoPublications()
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadImage(
+        Guid id,
+        IFormFile image)
     {
-        var userIdValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userId =
+            GetCurrentUserId();
 
-        if (!Guid.TryParse(userIdValue, out var userId))
+        if (userId is null)
         {
             return Unauthorized();
         }
 
-        var userExists =
-            await _context.Users
-                .AnyAsync(x =>
-                    x.Id == userId);
-
-        if (!userExists)
-        {
-            return NotFound(new
-            {
-                message =
-                    "Usuario no encontrado."
-            });
-        }
-
-        var demoPublications =
-            new List<Publication>
-            {
-                new()
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Title = "Maíz amarillo",
-                    Description =
-                        "Maíz amarillo seco disponible para entrega inmediata.",
-                    Price = 185.50m,
-                    Stock = 120,
-                    Unit = "Quintal",
-                    Category =
-                        "Granos y cereales",
-                    MinimumOrder = 10,
-                    Department = "Guatemala",
-                    Municipality = "Guatemala",
-                    IsActive = true,
-                    CreatedAt =
-                        DateTime.UtcNow
-                },
-                new()
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Title = "Frijol negro",
-                    Description =
-                        "Frijol negro seleccionado de producción nacional.",
-                    Price = 430.00m,
-                    Stock = 60,
-                    Unit = "Quintal",
-                    Category =
-                        "Granos y cereales",
-                    MinimumOrder = 5,
-                    Department = "Chiquimula",
-                    Municipality =
-                        "Chiquimula",
-                    IsActive = true,
-                    CreatedAt =
-                        DateTime.UtcNow
-                },
-                new()
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Title = "Café pergamino",
-                    Description =
-                        "Café pergamino seco disponible por lote.",
-                    Price = 950.00m,
-                    Stock = 35,
-                    Unit = "Quintal",
-                    Category = "Café",
-                    MinimumOrder = 5,
-                    Department =
-                        "Huehuetenango",
-                    Municipality =
-                        "Huehuetenango",
-                    IsActive = true,
-                    CreatedAt =
-                        DateTime.UtcNow
-                }
-            };
-
-        _context.Publications.AddRange(
-            demoPublications
-        );
-
-        await _context.SaveChangesAsync();
-
-        return Created("", new
-        {
-            message =
-                "Publicaciones demo creadas correctamente.",
-            count =
-                demoPublications.Count
-        });
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
-    {
-        var publications =
-            await _context.Publications
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive &&
-                    x.Stock > 0)
-                .OrderByDescending(x =>
-                    x.CreatedAt)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.Title,
-                    x.Description,
-                    x.Price,
-                    x.Stock,
-                    x.Unit,
-                    x.Category,
-                    x.MinimumOrder,
-                    x.Department,
-                    x.Municipality,
-                    x.ImageUrl,
-                    x.IsActive,
-                    x.CreatedAt,
-                    Seller = new
-                    {
-                        x.User.Id,
-                        x.User.Email
-                    }
-                })
-                .ToListAsync();
-
-        return Ok(publications);
-    }
-
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(
-        Guid id)
-    {
         var publication =
             await _context.Publications
-                .AsNoTracking()
-                .Where(x =>
+                .FirstOrDefaultAsync(x =>
                     x.Id == id &&
-                    x.IsActive &&
-                    x.Stock > 0)
-                .Select(x => new
-                {
-                    x.Id,
-                    x.Title,
-                    x.Description,
-                    x.Price,
-                    x.Stock,
-                    x.Unit,
-                    x.Category,
-                    x.MinimumOrder,
-                    x.Department,
-                    x.Municipality,
-                    x.ImageUrl,
-                    x.IsActive,
-                    x.CreatedAt,
-                    Seller = new
-                    {
-                        x.User.Id,
-                        x.User.Email
-                    }
-                })
-                .FirstOrDefaultAsync();
+                    x.UserId ==
+                    userId.Value);
 
         if (publication is null)
         {
@@ -695,11 +548,208 @@ public class PublicationsController : ControllerBase
             });
         }
 
-        return Ok(publication);
+        if (
+            image is null ||
+            image.Length == 0)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Debes seleccionar una imagen."
+            });
+        }
+
+        if (
+            image.Length >
+            MaxImageSize)
+        {
+            return BadRequest(new
+            {
+                message =
+                    "La imagen no puede superar los 5 MB."
+            });
+        }
+
+        var extension =
+            Path.GetExtension(
+                image.FileName)
+                .ToLowerInvariant();
+
+        if (
+            string.IsNullOrWhiteSpace(
+                extension) ||
+            !AllowedImageExtensions
+                .Contains(
+                    extension))
+        {
+            return BadRequest(new
+            {
+                message =
+                    "Solo se permiten imágenes JPG, JPEG, PNG o WEBP."
+            });
+        }
+
+        var contentType =
+            image.ContentType
+                .ToLowerInvariant();
+
+        if (
+            !AllowedImageContentTypes
+                .Contains(
+                    contentType))
+        {
+            return BadRequest(new
+            {
+                message =
+                    "El tipo de archivo seleccionado no es válido."
+            });
+        }
+
+        var webRootPath =
+            _environment.WebRootPath;
+
+        if (
+            string.IsNullOrWhiteSpace(
+                webRootPath))
+        {
+            webRootPath =
+                Path.Combine(
+                    _environment.ContentRootPath,
+                    "wwwroot"
+                );
+        }
+
+        var uploadsDirectory =
+            Path.Combine(
+                webRootPath,
+                "uploads",
+                "publications"
+            );
+
+        Directory.CreateDirectory(
+            uploadsDirectory
+        );
+
+        var fileName =
+            $"{Guid.NewGuid()}{extension}";
+
+        var filePath =
+            Path.Combine(
+                uploadsDirectory,
+                fileName
+            );
+
+        await using (
+            var stream =
+                new FileStream(
+                    filePath,
+                    FileMode.Create))
+        {
+            await image.CopyToAsync(
+                stream
+            );
+        }
+
+        DeleteLocalImageIfExists(
+            publication.ImageUrl,
+            uploadsDirectory
+        );
+
+        publication.ImageUrl =
+            $"{Request.Scheme}://{Request.Host}/uploads/publications/{fileName}";
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            publication.Id,
+            publication.ImageUrl
+        });
+    }
+
+    [HttpDelete("{id:guid}/image")]
+    [Authorize(Roles = "Proveedor,Administrador")]
+    public async Task<IActionResult> DeleteImage(
+        Guid id)
+    {
+        var userId =
+            GetCurrentUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var publication =
+            await _context.Publications
+                .FirstOrDefaultAsync(x =>
+                    x.Id == id &&
+                    x.UserId ==
+                    userId.Value);
+
+        if (publication is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Publicación no encontrada."
+            });
+        }
+
+        var webRootPath =
+            _environment.WebRootPath;
+
+        if (
+            string.IsNullOrWhiteSpace(
+                webRootPath))
+        {
+            webRootPath =
+                Path.Combine(
+                    _environment.ContentRootPath,
+                    "wwwroot"
+                );
+        }
+
+        var uploadsDirectory =
+            Path.Combine(
+                webRootPath,
+                "uploads",
+                "publications"
+            );
+
+        DeleteLocalImageIfExists(
+            publication.ImageUrl,
+            uploadsDirectory
+        );
+
+        publication.ImageUrl = null;
+
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var value =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier
+            );
+
+        if (
+            !Guid.TryParse(
+                value,
+                out var userId))
+        {
+            return null;
+        }
+
+        return userId;
     }
 
     private static object ToResponse(
-        Publication publication)
+        Publication publication,
+        string? sellerEmail)
     {
         return new
         {
@@ -715,7 +765,17 @@ public class PublicationsController : ControllerBase
             publication.Municipality,
             publication.ImageUrl,
             publication.IsActive,
-            publication.CreatedAt
+            publication.CreatedAt,
+
+            Seller = new
+            {
+                Id =
+                    publication.UserId,
+
+                Email =
+                    sellerEmail ??
+                    string.Empty
+            }
         };
     }
 
@@ -723,22 +783,29 @@ public class PublicationsController : ControllerBase
         string? imageUrl,
         string uploadsDirectory)
     {
-        if (string.IsNullOrWhiteSpace(imageUrl))
+        if (
+            string.IsNullOrWhiteSpace(
+                imageUrl))
         {
             return;
         }
 
-        if (!Uri.TryCreate(
-            imageUrl,
-            UriKind.Absolute,
-            out var uri))
+        if (
+            !Uri.TryCreate(
+                imageUrl,
+                UriKind.Absolute,
+                out var uri))
         {
             return;
         }
 
-        if (!uri.AbsolutePath.Contains(
-            "/uploads/publications/",
-            StringComparison.OrdinalIgnoreCase))
+        const string expectedPath =
+            "/uploads/publications/";
+
+        if (
+            !uri.AbsolutePath.StartsWith(
+                expectedPath,
+                StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -748,7 +815,9 @@ public class PublicationsController : ControllerBase
                 uri.LocalPath
             );
 
-        if (string.IsNullOrWhiteSpace(fileName))
+        if (
+            string.IsNullOrWhiteSpace(
+                fileName))
         {
             return;
         }
@@ -759,9 +828,13 @@ public class PublicationsController : ControllerBase
                 fileName
             );
 
-        if (System.IO.File.Exists(filePath))
+        if (
+            System.IO.File.Exists(
+                filePath))
         {
-            System.IO.File.Delete(filePath);
+            System.IO.File.Delete(
+                filePath
+            );
         }
     }
 }

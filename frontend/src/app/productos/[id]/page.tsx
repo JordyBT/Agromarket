@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Boxes,
   CalendarDays,
+  Heart,
   Leaf,
   MapPin,
   PackageCheck,
@@ -29,6 +30,12 @@ import {
 import {
   createReservation,
 } from "@/services/reservationService";
+
+import {
+  addFavorite,
+  checkFavorite,
+  removeFavorite,
+} from "@/services/favoriteService";
 
 import {
   getUser,
@@ -70,19 +77,46 @@ export default function ProductoDetallePage() {
   const [quantity, setQuantity] =
     useState("");
 
-  const [reservationError, setReservationError] =
-    useState("");
+  const [
+    reservationError,
+    setReservationError,
+  ] = useState("");
 
-  const [reservationSuccess, setReservationSuccess] =
-    useState("");
+  const [
+    reservationSuccess,
+    setReservationSuccess,
+  ] = useState("");
 
-  const [isSubmitting, setIsSubmitting] =
-    useState(false);
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
+
+  const [
+    isFavorite,
+    setIsFavorite,
+  ] = useState(false);
+
+  const [
+    favoriteLoading,
+    setFavoriteLoading,
+  ] = useState(false);
+
+  const [
+    favoriteError,
+    setFavoriteError,
+  ] = useState("");
 
   const user = useMemo(
     () => getUser(),
     []
   );
+
+  const isBuyer =
+    user?.rol === "Comprador";
+
+  const isProvider =
+    user?.rol === "Proveedor";
 
   useEffect(() => {
     async function loadPublication() {
@@ -115,6 +149,67 @@ export default function ProductoDetallePage() {
 
     loadPublication();
   }, [id]);
+
+  useEffect(() => {
+    async function loadFavoriteStatus() {
+      if (
+        !id ||
+        !isBuyer
+      ) {
+        return;
+      }
+
+      try {
+        const result =
+          await checkFavorite(id);
+
+        setIsFavorite(
+          result.isFavorite
+        );
+      } catch {
+        setIsFavorite(false);
+      }
+    }
+
+    loadFavoriteStatus();
+  }, [id, isBuyer]);
+
+  async function handleFavorite() {
+    if (
+      !publication ||
+      !isBuyer ||
+      favoriteLoading
+    ) {
+      return;
+    }
+
+    try {
+      setFavoriteLoading(true);
+      setFavoriteError("");
+
+      if (isFavorite) {
+        await removeFavorite(
+          publication.id
+        );
+
+        setIsFavorite(false);
+      } else {
+        await addFavorite(
+          publication.id
+        );
+
+        setIsFavorite(true);
+      }
+    } catch (err) {
+      setFavoriteError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible actualizar favoritos."
+      );
+    } finally {
+      setFavoriteLoading(false);
+    }
+  }
 
   async function handleReservation() {
     if (!publication) {
@@ -222,9 +317,6 @@ export default function ProductoDetallePage() {
     );
   }
 
-  const isBuyer =
-    user?.rol === "Comprador";
-
   const total =
     Number(quantity) > 0
       ? Number(quantity) *
@@ -243,24 +335,45 @@ export default function ProductoDetallePage() {
             Volver al mercado
           </Link>
 
-          <Link
-            href="/"
-            className="flex items-center gap-3"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#173c29] text-white">
-              <Sprout size={18} />
-            </div>
+          <div className="flex items-center gap-3">
+            {isBuyer && (
+              <Link
+                href="/favoritos"
+                className="hidden items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-semibold transition hover:bg-[#ecebe3] sm:flex"
+              >
+                <Heart size={16} />
+                Favoritos
+              </Link>
+            )}
 
-            <div>
-              <p className="font-semibold">
-                Agromarket
-              </p>
+            {isProvider && (
+              <Link
+                href="/publicaciones/nueva"
+                className="hidden rounded-full bg-[#173c29] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#24583b] sm:block"
+              >
+                Publicar producto
+              </Link>
+            )}
 
-              <p className="text-[9px] uppercase tracking-[0.18em] text-[#7b837c]">
-                Mercado agrícola B2B
-              </p>
-            </div>
-          </Link>
+            <Link
+              href="/"
+              className="flex items-center gap-3"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#173c29] text-white">
+                <Sprout size={18} />
+              </div>
+
+              <div className="hidden sm:block">
+                <p className="font-semibold">
+                  Agromarket
+                </p>
+
+                <p className="text-[9px] uppercase tracking-[0.18em] text-[#7b837c]">
+                  Mercado agrícola B2B
+                </p>
+              </div>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -285,6 +398,12 @@ export default function ProductoDetallePage() {
             {publication.title}
           </span>
         </div>
+
+        {favoriteError && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            {favoriteError}
+          </div>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.8fr]">
           <div className="space-y-6">
@@ -315,6 +434,41 @@ export default function ProductoDetallePage() {
                   publication.category
                 }
               </div>
+
+              {isBuyer && (
+                <button
+                  type="button"
+                  onClick={
+                    handleFavorite
+                  }
+                  disabled={
+                    favoriteLoading
+                  }
+                  aria-label={
+                    isFavorite
+                      ? "Quitar de favoritos"
+                      : "Agregar a favoritos"
+                  }
+                  className={`absolute right-5 top-5 flex h-12 w-12 items-center justify-center rounded-full border shadow-sm transition ${
+                    isFavorite
+                      ? "border-[#173c29] bg-[#173c29] text-white"
+                      : "border-white/60 bg-[#fffdf7]/95 text-[#173c29] hover:bg-white"
+                  } ${
+                    favoriteLoading
+                      ? "cursor-wait opacity-60"
+                      : "hover:scale-105"
+                  }`}
+                >
+                  <Heart
+                    size={20}
+                    fill={
+                      isFavorite
+                        ? "currentColor"
+                        : "none"
+                    }
+                  />
+                </button>
+              )}
 
               <div className="absolute bottom-5 left-5 rounded-full bg-[#fffdf7]/95 px-4 py-2 text-xs font-medium shadow-sm">
                 Publicación disponible
@@ -457,11 +611,44 @@ export default function ProductoDetallePage() {
                 </span>
               </div>
 
-              <h1 className="mt-5 text-4xl font-semibold tracking-[-0.045em]">
-                {
-                  publication.title
-                }
-              </h1>
+              <div className="mt-5 flex items-start justify-between gap-4">
+                <h1 className="text-4xl font-semibold tracking-[-0.045em]">
+                  {
+                    publication.title
+                  }
+                </h1>
+
+                {isBuyer && (
+                  <button
+                    type="button"
+                    onClick={
+                      handleFavorite
+                    }
+                    disabled={
+                      favoriteLoading
+                    }
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition ${
+                      isFavorite
+                        ? "border-[#173c29] bg-[#173c29] text-white"
+                        : "border-[#172019]/15 bg-[#fffdf7] text-[#173c29] hover:bg-[#eeeee5]"
+                    }`}
+                    title={
+                      isFavorite
+                        ? "Quitar de favoritos"
+                        : "Agregar a favoritos"
+                    }
+                  >
+                    <Heart
+                      size={19}
+                      fill={
+                        isFavorite
+                          ? "currentColor"
+                          : "none"
+                      }
+                    />
+                  </button>
+                )}
+              </div>
 
               <div className="mt-7 border-y border-[#172019]/10 py-6">
                 <p className="text-xs uppercase tracking-[0.15em] text-[#7c847d]">

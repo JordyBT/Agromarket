@@ -33,4 +33,5 @@ backend/**/coverage/
 appsettings.Development.json
 appsettings.Local.json
 
-*.log
+*.logbackend/Agromarket.Api/wwwroot/uploads/
+/backend/Agromarket.Api/wwwroot/uploads/

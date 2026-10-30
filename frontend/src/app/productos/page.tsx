@@ -6,12 +6,16 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { LucideIcon } from "lucide-react";
+
+import type {
+  LucideIcon,
+} from "lucide-react";
 
 import {
   ArrowLeft,
   ArrowRight,
   Filter,
+  Heart,
   Leaf,
   MapPin,
   Package,
@@ -25,6 +29,16 @@ import {
   getPublications,
   type Publication,
 } from "@/services/publicationService";
+
+import {
+  addFavorite,
+  getFavorites,
+  removeFavorite,
+} from "@/services/favoriteService";
+
+import {
+  getUser,
+} from "@/services/sessionService";
 
 function getIcon(
   category: string
@@ -63,26 +77,69 @@ function formatPrice(
 }
 
 export default function ProductosPage() {
-  const [products, setProducts] =
-    useState<Publication[]>([]);
+  const [
+    products,
+    setProducts,
+  ] = useState<Publication[]>([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const [search, setSearch] =
-    useState("");
+  const [
+    search,
+    setSearch,
+  ] = useState("");
 
-  const [category, setCategory] =
-    useState("Todos");
+  const [
+    category,
+    setCategory,
+  ] = useState("Todos");
 
-  const [department, setDepartment] =
-    useState("");
+  const [
+    department,
+    setDepartment,
+  ] = useState("");
 
-  const [sort, setSort] =
-    useState("recent");
+  const [
+    sort,
+    setSort,
+  ] = useState("recent");
+
+  const [
+    isBuyer,
+    setIsBuyer,
+  ] = useState(false);
+
+  const [
+    isProvider,
+    setIsProvider,
+  ] = useState(false);
+
+  const [
+    favoriteIds,
+    setFavoriteIds,
+  ] = useState<Set<string>>(
+    new Set()
+  );
+
+  const [
+    favoriteLoadingId,
+    setFavoriteLoadingId,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    favoriteError,
+    setFavoriteError,
+  ] = useState("");
 
   useEffect(() => {
     async function loadProducts() {
@@ -107,6 +164,128 @@ export default function ProductosPage() {
 
     loadProducts();
   }, []);
+
+  useEffect(() => {
+    async function loadUserData() {
+      const currentUser =
+        getUser();
+
+      const buyer =
+        currentUser?.rol ===
+        "Comprador";
+
+      const provider =
+        currentUser?.rol ===
+          "Proveedor" ||
+        currentUser?.rol ===
+          "Administrador";
+
+      setIsBuyer(buyer);
+      setIsProvider(provider);
+
+      if (!buyer) {
+        setFavoriteIds(
+          new Set()
+        );
+
+        return;
+      }
+
+      try {
+        const favorites =
+          await getFavorites();
+
+        setFavoriteIds(
+          new Set(
+            favorites.map(
+              (favorite) =>
+                favorite.publicationId
+            )
+          )
+        );
+      } catch {
+        setFavoriteIds(
+          new Set()
+        );
+      }
+    }
+
+    loadUserData();
+  }, []);
+
+  async function toggleFavorite(
+    publicationId: string
+  ) {
+    if (!isBuyer) {
+      return;
+    }
+
+    if (
+      favoriteLoadingId ===
+      publicationId
+    ) {
+      return;
+    }
+
+    setFavoriteError("");
+
+    setFavoriteLoadingId(
+      publicationId
+    );
+
+    const alreadyFavorite =
+      favoriteIds.has(
+        publicationId
+      );
+
+    try {
+      if (alreadyFavorite) {
+        await removeFavorite(
+          publicationId
+        );
+
+        setFavoriteIds(
+          (current) => {
+            const next =
+              new Set(current);
+
+            next.delete(
+              publicationId
+            );
+
+            return next;
+          }
+        );
+      } else {
+        await addFavorite(
+          publicationId
+        );
+
+        setFavoriteIds(
+          (current) => {
+            const next =
+              new Set(current);
+
+            next.add(
+              publicationId
+            );
+
+            return next;
+          }
+        );
+      }
+    } catch (err) {
+      setFavoriteError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible actualizar favoritos."
+      );
+    } finally {
+      setFavoriteLoadingId(
+        null
+      );
+    }
+  }
 
   const categories =
     useMemo(() => {
@@ -145,6 +324,10 @@ export default function ProductosPage() {
       const result =
         products.filter(
           (product) => {
+            const sellerEmail =
+              product.seller?.email ??
+              "";
+
             const matchesSearch =
               product.title
                 .toLowerCase()
@@ -166,8 +349,8 @@ export default function ProductosPage() {
                 .includes(
                   searchValue
                 ) ||
-              product.seller?.email
-                ?.toLowerCase()
+              sellerEmail
+                .toLowerCase()
                 .includes(
                   searchValue
                 );
@@ -243,6 +426,7 @@ export default function ProductosPage() {
               <ArrowLeft
                 size={17}
               />
+
               Dashboard
             </Link>
 
@@ -270,12 +454,31 @@ export default function ProductosPage() {
             </Link>
           </div>
 
-          <Link
-            href="/publicaciones/nueva"
-            className="rounded-full bg-[#173c29] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#24583b]"
-          >
-            Publicar producto
-          </Link>
+          <div className="flex items-center gap-3">
+            {isBuyer && (
+              <Link
+                href="/favoritos"
+                className="flex items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-semibold transition hover:bg-[#ecebe3]"
+              >
+                <Heart
+                  size={16}
+                />
+
+                <span className="hidden sm:inline">
+                  Favoritos
+                </span>
+              </Link>
+            )}
+
+            {isProvider && (
+              <Link
+                href="/publicaciones/nueva"
+                className="rounded-full bg-[#173c29] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#24583b]"
+              >
+                Publicar producto
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 
@@ -314,8 +517,7 @@ export default function ProductosPage() {
                   event
                 ) =>
                   setSearch(
-                    event.target
-                      .value
+                    event.target.value
                   )
                 }
                 placeholder="Buscar maíz, café, tomate..."
@@ -330,6 +532,12 @@ export default function ProductosPage() {
         {error && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
             {error}
+          </div>
+        )}
+
+        {favoriteError && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            {favoriteError}
           </div>
         )}
 
@@ -379,9 +587,7 @@ export default function ProductosPage() {
                         />
 
                         <span className="text-sm text-[#626b63]">
-                          {
-                            item
-                          }
+                          {item}
                         </span>
                       </label>
                     )
@@ -402,8 +608,7 @@ export default function ProductosPage() {
                     event
                   ) =>
                     setDepartment(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   className="w-full rounded-xl border border-[#172019]/15 bg-[#fffdf7] px-4 py-3 text-sm outline-none"
@@ -423,9 +628,7 @@ export default function ProductosPage() {
                           item
                         }
                       >
-                        {
-                          item
-                        }
+                        {item}
                       </option>
                     )
                   )}
@@ -490,8 +693,7 @@ export default function ProductosPage() {
                     event
                   ) =>
                     setSort(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   className="rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-medium outline-none"
@@ -527,6 +729,15 @@ export default function ProductosPage() {
                         product.category
                       );
 
+                    const favorite =
+                      favoriteIds.has(
+                        product.id
+                      );
+
+                    const savingFavorite =
+                      favoriteLoadingId ===
+                      product.id;
+
                     return (
                       <article
                         key={
@@ -534,47 +745,93 @@ export default function ProductosPage() {
                         }
                         className="group overflow-hidden rounded-3xl border border-[#172019]/10 bg-[#fffdf7] transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#173c29]/5"
                       >
-                        <Link
-                          href={`/productos/${product.id}`}
-                          className="relative block h-52 overflow-hidden bg-[#e2e6d7]"
-                        >
-                          {product.imageUrl ? (
-                            <img
-                              src={
-                                product.imageUrl
-                              }
-                              alt={
-                                product.title
-                              }
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-                            />
-                          ) : (
-                            <div className="relative flex h-full items-center justify-center">
-                              <div className="absolute inset-0 opacity-[0.07]">
-                                <div className="absolute left-1/3 top-0 h-full w-px bg-[#173c29]" />
-                                <div className="absolute left-2/3 top-0 h-full w-px bg-[#173c29]" />
-                                <div className="absolute left-0 top-1/2 h-px w-full bg-[#173c29]" />
-                              </div>
+                        <div className="relative h-52 overflow-hidden bg-[#e2e6d7]">
+                          <Link
+                            href={`/productos/${product.id}`}
+                            className="block h-full w-full"
+                          >
+                            {product.imageUrl ? (
+                              <img
+                                src={
+                                  product.imageUrl
+                                }
+                                alt={
+                                  product.title
+                                }
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                              />
+                            ) : (
+                              <div className="relative flex h-full items-center justify-center">
+                                <div className="absolute inset-0 opacity-[0.07]">
+                                  <div className="absolute left-1/3 top-0 h-full w-px bg-[#173c29]" />
+                                  <div className="absolute left-2/3 top-0 h-full w-px bg-[#173c29]" />
+                                  <div className="absolute left-0 top-1/2 h-px w-full bg-[#173c29]" />
+                                </div>
 
-                              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#173c29] text-white">
-                                <Icon
-                                  size={
-                                    38
-                                  }
-                                  strokeWidth={
-                                    1.5
-                                  }
-                                />
+                                <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#173c29] text-white">
+                                  <Icon
+                                    size={
+                                      38
+                                    }
+                                    strokeWidth={
+                                      1.5
+                                    }
+                                  />
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </Link>
 
                           <span className="absolute left-4 top-4 rounded-full bg-[#fffdf7]/95 px-3 py-1.5 text-[11px] font-semibold text-[#526057] shadow-sm">
                             {
                               product.category
                             }
                           </span>
-                        </Link>
+
+                          {isBuyer && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                toggleFavorite(
+                                  product.id
+                                )
+                              }
+                              disabled={
+                                savingFavorite
+                              }
+                              aria-label={
+                                favorite
+                                  ? "Quitar de favoritos"
+                                  : "Agregar a favoritos"
+                              }
+                              title={
+                                favorite
+                                  ? "Quitar de favoritos"
+                                  : "Agregar a favoritos"
+                              }
+                              className={`absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border shadow-sm transition ${
+                                favorite
+                                  ? "border-[#173c29] bg-[#173c29] text-white"
+                                  : "border-white/60 bg-[#fffdf7]/95 text-[#173c29] hover:bg-white"
+                              } ${
+                                savingFavorite
+                                  ? "cursor-wait opacity-60"
+                                  : "hover:scale-105"
+                              }`}
+                            >
+                              <Heart
+                                size={
+                                  18
+                                }
+                                fill={
+                                  favorite
+                                    ? "currentColor"
+                                    : "none"
+                                }
+                              />
+                            </button>
+                          )}
+                        </div>
 
                         <div className="p-5">
                           <div className="flex items-center gap-1.5 text-xs text-[#7b837c]">
@@ -679,43 +936,46 @@ export default function ProductosPage() {
         </div>
       </div>
 
-      <section className="mt-10 bg-[#173c29] text-white">
-        <div className="mx-auto flex max-w-[1400px] flex-col justify-between gap-8 px-6 py-12 md:flex-row md:items-center lg:px-10">
-          <div>
-            <div className="flex items-center gap-2 text-[#b9c995]">
-              <Package
-                size={17}
-              />
+      {isProvider && (
+        <section className="mt-10 bg-[#173c29] text-white">
+          <div className="mx-auto flex max-w-[1400px] flex-col justify-between gap-8 px-6 py-12 md:flex-row md:items-center lg:px-10">
+            <div>
+              <div className="flex items-center gap-2 text-[#b9c995]">
+                <Package
+                  size={17}
+                />
 
-              <p className="text-xs font-semibold uppercase tracking-[0.18em]">
-                Para proveedores
+                <p className="text-xs font-semibold uppercase tracking-[0.18em]">
+                  Para proveedores
+                </p>
+              </div>
+
+              <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.04em]">
+                ¿Tienes producto
+                disponible para vender?
+              </h2>
+
+              <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
+                Publica inventario y
+                permite que los
+                compradores encuentren
+                tu oferta.
               </p>
             </div>
 
-            <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.04em]">
-              ¿Tienes producto
-              disponible para vender?
-            </h2>
+            <Link
+              href="/publicaciones/nueva"
+              className="flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#f4f2ea] px-6 py-3.5 text-sm font-semibold text-[#173c29]"
+            >
+              Crear publicación
 
-            <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
-              Publica inventario y
-              permite que los
-              compradores encuentren
-              tu oferta.
-            </p>
+              <ArrowRight
+                size={16}
+              />
+            </Link>
           </div>
-
-          <Link
-            href="/publicaciones/nueva"
-            className="flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#f4f2ea] px-6 py-3.5 text-sm font-semibold text-[#173c29]"
-          >
-            Crear publicación
-            <ArrowRight
-              size={16}
-            />
-          </Link>
-        </div>
-      </section>
+        </section>
+      )}
     </main>
   );
 }

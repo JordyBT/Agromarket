@@ -28,10 +28,14 @@ public class Publication
 
     public bool IsActive { get; set; } = true;
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
+        = DateTime.UtcNow;
 
     public User User { get; set; } = null!;
 
     public ICollection<Reservation> Reservations { get; set; }
         = new List<Reservation>();
+
+    public ICollection<Favorite> Favorites { get; set; }
+        = new List<Favorite>();
 }
