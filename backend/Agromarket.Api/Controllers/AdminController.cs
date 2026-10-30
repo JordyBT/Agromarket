@@ -105,8 +105,6 @@ public class AdminController : ControllerBase
         var totalMessages =
             await _context.ChatMessages.CountAsync();
 
-        decimal totalAcceptedValue = 0;
-
         var acceptedData =
             await _context.Reservations
                 .AsNoTracking()
@@ -121,7 +119,7 @@ public class AdminController : ControllerBase
                 })
                 .ToListAsync();
 
-        totalAcceptedValue =
+        var totalAcceptedValue =
             acceptedData.Sum(
                 x =>
                     x.Quantity *
@@ -132,22 +130,15 @@ public class AdminController : ControllerBase
         {
             Users = new
             {
-                Total =
-                    totalUsers,
-
-                Active =
-                    activeUsers,
-
+                Total = totalUsers,
+                Active = activeUsers,
                 Inactive =
                     totalUsers -
                     activeUsers,
-
                 Buyers =
                     totalBuyers,
-
                 Providers =
                     totalProviders,
-
                 Admins =
                     totalAdmins
             },
@@ -509,6 +500,287 @@ public class AdminController : ControllerBase
                 .ToListAsync();
 
         return Ok(reservations);
+    }
+
+    // =========================================================
+    // RESEÑAS
+    // =========================================================
+
+    [HttpGet("reviews")]
+    public async Task<IActionResult> GetReviews()
+    {
+        var reviews =
+            await _context.Reviews
+                .AsNoTracking()
+                .OrderByDescending(
+                    x => x.CreatedAt
+                )
+                .Select(x => new
+                {
+                    x.Id,
+                    x.ReservationId,
+                    x.Rating,
+                    x.Comment,
+                    x.CreatedAt,
+
+                    Publication = new
+                    {
+                        x.Reservation.Publication.Id,
+                        x.Reservation.Publication.Title,
+                        x.Reservation.Publication.ImageUrl
+                    },
+
+                    Buyer = new
+                    {
+                        x.Buyer.Id,
+                        x.Buyer.Email,
+
+                        FirstName =
+                            x.Buyer.Profile != null
+                                ? x.Buyer.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Buyer.Profile != null
+                                ? x.Buyer.Profile.LastName
+                                : ""
+                    },
+
+                    Provider = new
+                    {
+                        x.Provider.Id,
+                        x.Provider.Email,
+
+                        FirstName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.LastName
+                                : "",
+
+                        CompanyName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.CompanyName
+                                : ""
+                    }
+                })
+                .ToListAsync();
+
+        return Ok(reviews);
+    }
+
+    // =========================================================
+    // CONVERSACIONES
+    // =========================================================
+
+    [HttpGet("conversations")]
+    public async Task<IActionResult> GetConversations()
+    {
+        var conversations =
+            await _context.Conversations
+                .AsNoTracking()
+                .OrderByDescending(
+                    x => x.UpdatedAt
+                )
+                .Select(x => new
+                {
+                    x.Id,
+                    x.CreatedAt,
+                    x.UpdatedAt,
+
+                    Publication = new
+                    {
+                        x.Publication.Id,
+                        x.Publication.Title,
+                        x.Publication.ImageUrl
+                    },
+
+                    Buyer = new
+                    {
+                        x.Buyer.Id,
+                        x.Buyer.Email,
+
+                        FirstName =
+                            x.Buyer.Profile != null
+                                ? x.Buyer.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Buyer.Profile != null
+                                ? x.Buyer.Profile.LastName
+                                : ""
+                    },
+
+                    Provider = new
+                    {
+                        x.Provider.Id,
+                        x.Provider.Email,
+
+                        FirstName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.LastName
+                                : "",
+
+                        CompanyName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.CompanyName
+                                : ""
+                    },
+
+                    MessagesCount =
+                        x.Messages.Count,
+
+                    LastMessage =
+                        x.Messages
+                            .OrderByDescending(
+                                message =>
+                                    message.CreatedAt
+                            )
+                            .Select(
+                                message =>
+                                    new
+                                    {
+                                        message.Id,
+                                        message.SenderId,
+                                        message.Content,
+                                        message.CreatedAt
+                                    }
+                            )
+                            .FirstOrDefault()
+                })
+                .ToListAsync();
+
+        return Ok(conversations);
+    }
+
+    [HttpGet(
+        "conversations/{id:guid}/messages"
+    )]
+    public async Task<IActionResult>
+        GetConversationMessages(
+            Guid id)
+    {
+        var conversation =
+            await _context.Conversations
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.Id == id
+                )
+                .Select(x => new
+                {
+                    x.Id,
+                    x.CreatedAt,
+                    x.UpdatedAt,
+
+                    Publication = new
+                    {
+                        x.Publication.Id,
+                        x.Publication.Title,
+                        x.Publication.ImageUrl
+                    },
+
+                    Buyer = new
+                    {
+                        x.Buyer.Id,
+                        x.Buyer.Email,
+
+                        FirstName =
+                            x.Buyer.Profile != null
+                                ? x.Buyer.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Buyer.Profile != null
+                                ? x.Buyer.Profile.LastName
+                                : ""
+                    },
+
+                    Provider = new
+                    {
+                        x.Provider.Id,
+                        x.Provider.Email,
+
+                        FirstName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.LastName
+                                : "",
+
+                        CompanyName =
+                            x.Provider.Profile != null
+                                ? x.Provider.Profile.CompanyName
+                                : ""
+                    }
+                })
+                .FirstOrDefaultAsync();
+
+        if (conversation is null)
+        {
+            return NotFound(new
+            {
+                message =
+                    "Conversación no encontrada."
+            });
+        }
+
+        var messages =
+            await _context.ChatMessages
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.ConversationId == id
+                )
+                .OrderBy(
+                    x =>
+                        x.CreatedAt
+                )
+                .Select(x => new
+                {
+                    x.Id,
+                    x.ConversationId,
+                    x.SenderId,
+                    x.Content,
+                    x.CreatedAt,
+
+                    Sender = new
+                    {
+                        x.Sender.Id,
+                        x.Sender.Email,
+
+                        FirstName =
+                            x.Sender.Profile != null
+                                ? x.Sender.Profile.FirstName
+                                : "",
+
+                        LastName =
+                            x.Sender.Profile != null
+                                ? x.Sender.Profile.LastName
+                                : ""
+                    }
+                })
+                .ToListAsync();
+
+        return Ok(new
+        {
+            Conversation =
+                conversation,
+
+            Messages =
+                messages
+        });
     }
 
     // =========================================================

@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useState,
+  type ReactNode,
 } from "react";
 
 import {
@@ -24,20 +25,27 @@ import {
   Sprout,
   UserCheck,
   Users,
+  X,
   XCircle,
 } from "lucide-react";
 
 import {
   getAdminActivity,
+  getAdminConversationMessages,
+  getAdminConversations,
   getAdminPublications,
   getAdminReservations,
+  getAdminReviews,
   getAdminSummary,
   getAdminUsers,
   updateAdminPublicationStatus,
   updateAdminUserStatus,
   type AdminActivity,
+  type AdminConversation,
+  type AdminConversationDetails,
   type AdminPublication,
   type AdminReservation,
+  type AdminReview,
   type AdminSummary,
   type AdminUser,
 } from "@/services/adminService";
@@ -54,11 +62,11 @@ type Tab =
   | "resumen"
   | "usuarios"
   | "publicaciones"
-  | "reservas";
+  | "reservas"
+  | "resenas"
+  | "conversaciones";
 
-function formatPrice(
-  value: number
-) {
+function formatPrice(value: number) {
   return new Intl.NumberFormat(
     "es-GT",
     {
@@ -69,9 +77,7 @@ function formatPrice(
   ).format(value);
 }
 
-function formatDate(
-  value: string
-) {
+function formatDate(value: string) {
   return new Intl.DateTimeFormat(
     "es-GT",
     {
@@ -97,6 +103,30 @@ function getDisplayName(
     `${user.profile?.firstName ?? ""} ${user.profile?.lastName ?? ""}`.trim();
 
   return name || user.email;
+}
+
+function getPersonName(person: {
+  firstName: string;
+  lastName: string;
+  email: string;
+}) {
+  const name =
+    `${person.firstName ?? ""} ${person.lastName ?? ""}`.trim();
+
+  return name || person.email;
+}
+
+function getProviderName(provider: {
+  firstName: string;
+  lastName: string;
+  companyName: string;
+  email: string;
+}) {
+  if (provider.companyName?.trim()) {
+    return provider.companyName;
+  }
+
+  return getPersonName(provider);
 }
 
 function reservationStatusLabel(
@@ -189,6 +219,22 @@ export default function AdminPage() {
     );
 
   const [
+    reviews,
+    setReviews,
+  ] =
+    useState<AdminReview[]>(
+      []
+    );
+
+  const [
+    conversations,
+    setConversations,
+  ] =
+    useState<AdminConversation[]>(
+      []
+    );
+
+  const [
     activity,
     setActivity,
   ] =
@@ -213,6 +259,20 @@ export default function AdminPage() {
     useState<string | null>(
       null
     );
+
+  const [
+    selectedConversation,
+    setSelectedConversation,
+  ] =
+    useState<AdminConversationDetails | null>(
+      null
+    );
+
+  const [
+    conversationLoading,
+    setConversationLoading,
+  ] =
+    useState(false);
 
   const isAdmin =
     user?.rol ===
@@ -247,6 +307,8 @@ export default function AdminPage() {
             usersData,
             publicationsData,
             reservationsData,
+            reviewsData,
+            conversationsData,
             activityData,
           ] =
             await Promise.all([
@@ -254,6 +316,8 @@ export default function AdminPage() {
               getAdminUsers(),
               getAdminPublications(),
               getAdminReservations(),
+              getAdminReviews(),
+              getAdminConversations(),
               getAdminActivity(),
             ]);
 
@@ -271,6 +335,14 @@ export default function AdminPage() {
 
           setReservations(
             reservationsData
+          );
+
+          setReviews(
+            reviewsData
+          );
+
+          setConversations(
+            conversationsData
           );
 
           setActivity(
@@ -410,6 +482,37 @@ export default function AdminPage() {
     }
   }
 
+  async function handleOpenConversation(
+    id: string
+  ) {
+    try {
+      setConversationLoading(
+        true
+      );
+
+      setError("");
+
+      const data =
+        await getAdminConversationMessages(
+          id
+        );
+
+      setSelectedConversation(
+        data
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible cargar la conversación."
+      );
+    } finally {
+      setConversationLoading(
+        false
+      );
+    }
+  }
+
   if (!sessionChecked) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#f4f2ea] text-[#172019]">
@@ -470,6 +573,7 @@ export default function AdminPage() {
             <ArrowLeft
               size={17}
             />
+
             Dashboard
           </Link>
 
@@ -509,9 +613,9 @@ export default function AdminPage() {
 
             <p className="mt-4 max-w-2xl text-sm leading-6 text-[#687069]">
               Supervisa usuarios,
-              publicaciones, reservas
-              y actividad general de
-              Agromarket.
+              publicaciones, reservas,
+              reseñas y conversaciones
+              de Agromarket.
             </p>
           </div>
 
@@ -600,6 +704,34 @@ export default function AdminPage() {
           >
             Reservas
           </TabButton>
+
+          <TabButton
+            active={
+              tab ===
+              "resenas"
+            }
+            onClick={() =>
+              setTab(
+                "resenas"
+              )
+            }
+          >
+            Reseñas
+          </TabButton>
+
+          <TabButton
+            active={
+              tab ===
+              "conversaciones"
+            }
+            onClick={() =>
+              setTab(
+                "conversaciones"
+              )
+            }
+          >
+            Conversaciones
+          </TabButton>
         </nav>
 
         {loading ? (
@@ -661,9 +793,46 @@ export default function AdminPage() {
                   }
                 />
               )}
+
+            {tab ===
+              "resenas" && (
+                <ReviewsView
+                  reviews={
+                    reviews
+                  }
+                />
+              )}
+
+            {tab ===
+              "conversaciones" && (
+                <ConversationsView
+                  conversations={
+                    conversations
+                  }
+                  loading={
+                    conversationLoading
+                  }
+                  onOpen={
+                    handleOpenConversation
+                  }
+                />
+              )}
           </>
         )}
       </div>
+
+      {selectedConversation && (
+        <ConversationModal
+          details={
+            selectedConversation
+          }
+          onClose={() =>
+            setSelectedConversation(
+              null
+            )
+          }
+        />
+      )}
     </main>
   );
 }
@@ -1086,6 +1255,13 @@ function UsersView({
                         }{" "}
                         reservas
                       </p>
+
+                      <p className="mt-1 text-xs text-[#626b63]">
+                        {
+                          item.reviewsCount
+                        }{" "}
+                        reseñas
+                      </p>
                     </td>
 
                     <td className="px-5 py-5 text-xs text-[#747c75]">
@@ -1264,6 +1440,7 @@ function PublicationsView({
                       <Heart
                         size={13}
                       />
+
                       {
                         item.favoritesCount
                       }
@@ -1368,18 +1545,18 @@ function ReservationsView({
                   <p className="mt-3 text-xs text-[#727a73]">
                     Comprador:{" "}
                     <strong>
-                      {item.buyer.firstName ||
-                      item.buyer.lastName
-                        ? `${item.buyer.firstName} ${item.buyer.lastName}`.trim()
-                        : item.buyer.email}
+                      {getPersonName(
+                        item.buyer
+                      )}
                     </strong>
                   </p>
 
                   <p className="mt-1 text-xs text-[#727a73]">
                     Proveedor:{" "}
                     <strong>
-                      {item.provider.companyName ||
-                        item.provider.email}
+                      {getProviderName(
+                        item.provider
+                      )}
                     </strong>
                   </p>
                 </div>
@@ -1415,8 +1592,499 @@ function ReservationsView({
             </article>
           )
         )}
+
+        {reservations.length ===
+          0 && (
+          <EmptyPanel text="No hay reservas registradas." />
+        )}
       </div>
     </section>
+  );
+}
+
+function ReviewsView({
+  reviews,
+}: {
+  reviews: AdminReview[];
+}) {
+  return (
+    <section className="mt-7">
+      <div className="mb-5">
+        <h2 className="text-2xl font-semibold">
+          Reseñas
+        </h2>
+
+        <p className="mt-2 text-sm text-[#727a73]">
+          {reviews.length} reseñas publicadas en Agromarket.
+        </p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {reviews.map(
+          (review) => (
+            <article
+              key={
+                review.id
+              }
+              className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6"
+            >
+              <div className="flex gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#e6eadf] text-[#315f3f]">
+                  <Star
+                    size={19}
+                  />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row">
+                    <div>
+                      <p className="font-semibold">
+                        {
+                          review.publication.title
+                        }
+                      </p>
+
+                      <p className="mt-1 text-xs text-[#747c75]">
+                        {formatDate(
+                          review.createdAt
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1 rounded-full bg-[#e7eadf] px-3 py-1.5 text-sm font-semibold text-[#315f3f]">
+                      <Star
+                        size={14}
+                        fill="currentColor"
+                      />
+
+                      {
+                        review.rating
+                      }/5
+                    </div>
+                  </div>
+
+                  <div className="mt-5 flex gap-1">
+                    {Array.from({
+                      length: 5,
+                    }).map(
+                      (
+                        _,
+                        index
+                      ) => (
+                        <Star
+                          key={
+                            index
+                          }
+                          size={16}
+                          className={
+                            index <
+                            review.rating
+                              ? "fill-[#a3a85d] text-[#a3a85d]"
+                              : "text-[#d4d4c8]"
+                          }
+                        />
+                      )
+                    )}
+                  </div>
+
+                  <div className="mt-5 rounded-2xl bg-[#f1efe6] p-4">
+                    <p className="text-sm leading-6 text-[#59615a]">
+                      {review.comment?.trim()
+                        ? review.comment
+                        : "El comprador no dejó un comentario."}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 border-t border-[#172019]/10 pt-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a918b]">
+                        Comprador
+                      </p>
+
+                      <p className="mt-1 text-sm font-semibold">
+                        {getPersonName(
+                          review.buyer
+                        )}
+                      </p>
+
+                      <p className="mt-1 truncate text-xs text-[#747c75]">
+                        {
+                          review.buyer.email
+                        }
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a918b]">
+                        Proveedor
+                      </p>
+
+                      <p className="mt-1 text-sm font-semibold">
+                        {getProviderName(
+                          review.provider
+                        )}
+                      </p>
+
+                      <p className="mt-1 truncate text-xs text-[#747c75]">
+                        {
+                          review.provider.email
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+          )
+        )}
+      </div>
+
+      {reviews.length ===
+        0 && (
+        <EmptyPanel text="Todavía no hay reseñas registradas." />
+      )}
+    </section>
+  );
+}
+
+function ConversationsView({
+  conversations,
+  loading,
+  onOpen,
+}: {
+  conversations: AdminConversation[];
+  loading: boolean;
+  onOpen: (
+    id: string
+  ) => void;
+}) {
+  return (
+    <section className="mt-7">
+      <div className="mb-5">
+        <h2 className="text-2xl font-semibold">
+          Conversaciones
+        </h2>
+
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[#727a73]">
+          Consulta las conversaciones entre compradores y proveedores
+          para fines de supervisión y moderación.
+        </p>
+      </div>
+
+      <div className="grid gap-4">
+        {conversations.map(
+          (conversation) => (
+            <article
+              key={
+                conversation.id
+              }
+              className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6"
+            >
+              <div className="flex flex-col gap-6 xl:flex-row xl:items-center">
+                <div className="flex min-w-0 flex-1 gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#e6eadf] text-[#315f3f]">
+                    <MessageCircle
+                      size={19}
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/productos/${conversation.publication.id}`}
+                      className="text-lg font-semibold hover:text-[#315f3f]"
+                    >
+                      {
+                        conversation.publication.title
+                      }
+                    </Link>
+
+                    <div className="mt-3 grid gap-2 text-xs text-[#6b736c] sm:grid-cols-2">
+                      <p>
+                        Comprador:{" "}
+                        <strong className="text-[#172019]">
+                          {getPersonName(
+                            conversation.buyer
+                          )}
+                        </strong>
+                      </p>
+
+                      <p>
+                        Proveedor:{" "}
+                        <strong className="text-[#172019]">
+                          {getProviderName(
+                            conversation.provider
+                          )}
+                        </strong>
+                      </p>
+                    </div>
+
+                    {conversation.lastMessage && (
+                      <div className="mt-4 rounded-2xl bg-[#f1efe6] p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#838a84]">
+                          Último mensaje
+                        </p>
+
+                        <p className="mt-2 line-clamp-2 text-sm text-[#59615a]">
+                          {
+                            conversation.lastMessage.content
+                          }
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 xl:justify-end">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.1em] text-[#8d948e]">
+                      Mensajes
+                    </p>
+
+                    <p className="mt-1 text-lg font-semibold">
+                      {
+                        conversation.messagesCount
+                      }
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.1em] text-[#8d948e]">
+                      Última actividad
+                    </p>
+
+                    <p className="mt-1 text-xs font-semibold">
+                      {formatDate(
+                        conversation.updatedAt
+                      )}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={
+                      loading
+                    }
+                    onClick={() =>
+                      onOpen(
+                        conversation.id
+                      )
+                    }
+                    className="rounded-full bg-[#173c29] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[#24583b] disabled:opacity-50"
+                  >
+                    {loading
+                      ? "Cargando..."
+                      : "Ver conversación"}
+                  </button>
+                </div>
+              </div>
+            </article>
+          )
+        )}
+
+        {conversations.length ===
+          0 && (
+          <EmptyPanel text="Todavía no hay conversaciones registradas." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ConversationModal({
+  details,
+  onClose,
+}: {
+  details: AdminConversationDetails;
+  onClose: () => void;
+}) {
+  const {
+    conversation,
+    messages,
+  } = details;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-[#f4f2ea] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-[#172019]/10 bg-[#fffdf7] px-5 py-5 sm:px-7">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#52705a]">
+              Supervisión de conversación
+            </p>
+
+            <h2 className="mt-2 text-xl font-semibold">
+              {
+                conversation.publication.title
+              }
+            </h2>
+
+            <p className="mt-2 text-xs text-[#747c75]">
+              {getPersonName(
+                conversation.buyer
+              )}{" "}
+              ·{" "}
+              {getProviderName(
+                conversation.provider
+              )}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={
+              onClose
+            }
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#172019]/10 bg-[#f4f2ea] hover:bg-[#e5e3d9]"
+            aria-label="Cerrar conversación"
+          >
+            <X
+              size={18}
+            />
+          </button>
+        </div>
+
+        <div className="grid border-b border-[#172019]/10 bg-[#eeeCE4] sm:grid-cols-2">
+          <div className="border-b border-[#172019]/10 px-5 py-4 sm:border-b-0 sm:border-r sm:px-7">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#858c86]">
+              Comprador
+            </p>
+
+            <p className="mt-1 text-sm font-semibold">
+              {getPersonName(
+                conversation.buyer
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-[#707871]">
+              {
+                conversation.buyer.email
+              }
+            </p>
+          </div>
+
+          <div className="px-5 py-4 sm:px-7">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#858c86]">
+              Proveedor
+            </p>
+
+            <p className="mt-1 text-sm font-semibold">
+              {getProviderName(
+                conversation.provider
+              )}
+            </p>
+
+            <p className="mt-1 text-xs text-[#707871]">
+              {
+                conversation.provider.email
+              }
+            </p>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-7">
+          {messages.length ===
+          0 ? (
+            <div className="flex min-h-64 items-center justify-center">
+              <p className="text-sm text-[#747c75]">
+                Esta conversación todavía no tiene mensajes.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages.map(
+                (message) => {
+                  const isBuyer =
+                    message.senderId ===
+                    conversation.buyer.id;
+
+                  return (
+                    <div
+                      key={
+                        message.id
+                      }
+                      className={`flex ${
+                        isBuyer
+                          ? "justify-start"
+                          : "justify-end"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-3xl px-5 py-4 sm:max-w-[70%] ${
+                          isBuyer
+                            ? "rounded-bl-md border border-[#172019]/10 bg-[#fffdf7]"
+                            : "rounded-br-md bg-[#173c29] text-white"
+                        }`}
+                      >
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <p
+                            className={`text-xs font-semibold ${
+                              isBuyer
+                                ? "text-[#315f3f]"
+                                : "text-[#b9c995]"
+                            }`}
+                          >
+                            {isBuyer
+                              ? "Comprador"
+                              : "Proveedor"}
+                          </p>
+
+                          <p
+                            className={`text-[10px] ${
+                              isBuyer
+                                ? "text-[#8b928c]"
+                                : "text-white/45"
+                            }`}
+                          >
+                            {formatDate(
+                              message.createdAt
+                            )}
+                          </p>
+                        </div>
+
+                        <p className="whitespace-pre-wrap break-words text-sm leading-6">
+                          {
+                            message.content
+                          }
+                        </p>
+
+                        <p
+                          className={`mt-2 text-[10px] ${
+                            isBuyer
+                              ? "text-[#8c938d]"
+                              : "text-white/40"
+                          }`}
+                        >
+                          {
+                            message.sender.email
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-[#172019]/10 bg-[#fffdf7] px-5 py-4 sm:px-7">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs leading-5 text-[#777f78]">
+              Vista administrativa de solo lectura.
+            </p>
+
+            <button
+              type="button"
+              onClick={
+                onClose
+              }
+              className="rounded-full bg-[#173c29] px-5 py-2.5 text-xs font-semibold text-white"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1427,7 +2095,7 @@ function TabButton({
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -1452,7 +2120,7 @@ function MetricCard({
   value,
   detail,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value:
     | number
@@ -1485,7 +2153,7 @@ function SmallMetric({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: number;
 }) {
@@ -1513,7 +2181,7 @@ function StatusMetric({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: number;
 }) {
@@ -1587,6 +2255,20 @@ function EmptyText() {
     <p className="text-sm text-[#858c86]">
       Sin actividad reciente.
     </p>
+  );
+}
+
+function EmptyPanel({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="rounded-3xl border border-dashed border-[#172019]/15 bg-[#fffdf7]/60 px-6 py-14 text-center">
+      <p className="text-sm text-[#747c75]">
+        {text}
+      </p>
+    </div>
   );
 }
 

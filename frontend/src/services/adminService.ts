@@ -87,6 +87,7 @@ export type AdminReservation = {
   id: string;
   quantity: number;
   unitPrice: number;
+
   status:
     | "Pending"
     | "Accepted"
@@ -118,6 +119,117 @@ export type AdminReservation = {
     lastName: string;
     companyName: string;
   };
+};
+
+export type AdminReview = {
+  id: string;
+  reservationId: string;
+  rating: number;
+  comment?: string | null;
+  createdAt: string;
+
+  publication: {
+    id: string;
+    title: string;
+    imageUrl?: string | null;
+  };
+
+  buyer: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
+
+  provider: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    companyName: string;
+  };
+};
+
+export type AdminConversation = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+
+  publication: {
+    id: string;
+    title: string;
+    imageUrl?: string | null;
+  };
+
+  buyer: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
+
+  provider: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    companyName: string;
+  };
+
+  messagesCount: number;
+
+  lastMessage: {
+    id: string;
+    senderId: string;
+    content: string;
+    createdAt: string;
+  } | null;
+};
+
+export type AdminChatMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+
+  sender: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  };
+};
+
+export type AdminConversationDetails = {
+  conversation: {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+
+    publication: {
+      id: string;
+      title: string;
+      imageUrl?: string | null;
+    };
+
+    buyer: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+    };
+
+    provider: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      companyName: string;
+    };
+  };
+
+  messages: AdminChatMessage[];
 };
 
 export type AdminActivity = {
@@ -213,6 +325,35 @@ export function updateAdminPublicationStatus(
 export function getAdminReservations() {
   return apiRequest<AdminReservation[]>(
     "/api/admin/reservations",
+    {
+      authenticated: true,
+    }
+  );
+}
+
+export function getAdminReviews() {
+  return apiRequest<AdminReview[]>(
+    "/api/admin/reviews",
+    {
+      authenticated: true,
+    }
+  );
+}
+
+export function getAdminConversations() {
+  return apiRequest<AdminConversation[]>(
+    "/api/admin/conversations",
+    {
+      authenticated: true,
+    }
+  );
+}
+
+export function getAdminConversationMessages(
+  id: string
+) {
+  return apiRequest<AdminConversationDetails>(
+    `/api/admin/conversations/${id}/messages`,
     {
       authenticated: true,
     }
