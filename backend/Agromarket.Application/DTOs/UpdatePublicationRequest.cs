@@ -36,4 +36,7 @@ public class UpdatePublicationRequest
     [Required]
     [MaxLength(100)]
     public string Municipality { get; set; } = string.Empty;
+
+    [MaxLength(1000)]
+    public string? ImageUrl { get; set; }
 }

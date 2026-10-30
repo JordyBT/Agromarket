@@ -1,7 +1,8 @@
 import { getToken } from "@/services/sessionService";
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:5000";
 
 type ApiRequestOptions = RequestInit & {
   token?: string | null;
@@ -16,44 +17,57 @@ export async function apiRequest<T>(
     token,
     authenticated = false,
     headers,
+    body,
     ...requestOptions
   } = options;
 
   const authToken =
     token ?? (authenticated ? getToken() : null);
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...requestOptions,
+  const isFormData =
+    typeof FormData !== "undefined" &&
+    body instanceof FormData;
 
-    headers: {
-      "Content-Type": "application/json",
-
-      ...(authToken
-        ? {
-            Authorization: `Bearer ${authToken}`,
-          }
-        : {}),
-
-      ...headers,
-    },
-  });
+  const response = await fetch(
+    `${API_URL}${endpoint}`,
+    {
+      ...requestOptions,
+      body,
+      headers: {
+        ...(isFormData
+          ? {}
+          : {
+              "Content-Type":
+                "application/json",
+            }),
+        ...(authToken
+          ? {
+              Authorization:
+                `Bearer ${authToken}`,
+            }
+          : {}),
+        ...headers,
+      },
+    }
+  );
 
   if (!response.ok) {
     let message =
       "Ocurrió un error al comunicarse con el servidor.";
 
     try {
-      const errorData = await response.json();
+      const errorData =
+        await response.json();
 
       if (
-        typeof errorData?.message === "string" &&
+        typeof errorData?.message ===
+          "string" &&
         errorData.message.trim()
       ) {
-        message = errorData.message;
+        message =
+          errorData.message;
       }
-    } catch {
-      // La respuesta del servidor no contenía JSON.
-    }
+    } catch {}
 
     throw new Error(message);
   }

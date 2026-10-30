@@ -26,6 +26,7 @@ export type Publication = {
   minimumOrder: number;
   department: string;
   municipality: string;
+  imageUrl?: string | null;
   isActive: boolean;
   createdAt: string;
   seller?: {
@@ -40,27 +41,42 @@ export type UpdatePublicationStatusResponse = {
   stock: number;
 };
 
+export type UploadPublicationImageResponse = {
+  id: string;
+  imageUrl: string;
+};
+
 export function createPublication(
   data: CreatePublicationRequest
 ) {
-  return apiRequest<Publication>("/api/publications", {
-    method: "POST",
-    authenticated: true,
-    body: JSON.stringify(data),
-  });
+  return apiRequest<Publication>(
+    "/api/publications",
+    {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(data),
+    }
+  );
 }
 
 export function getPublications() {
-  return apiRequest<Publication[]>("/api/publications");
+  return apiRequest<Publication[]>(
+    "/api/publications"
+  );
 }
 
 export function getMyPublications() {
-  return apiRequest<Publication[]>("/api/publications/mine", {
-    authenticated: true,
-  });
+  return apiRequest<Publication[]>(
+    "/api/publications/mine",
+    {
+      authenticated: true,
+    }
+  );
 }
 
-export function getMyPublicationById(id: string) {
+export function getMyPublicationById(
+  id: string
+) {
   return apiRequest<Publication>(
     `/api/publications/mine/${id}`,
     {
@@ -69,7 +85,9 @@ export function getMyPublicationById(id: string) {
   );
 }
 
-export function getPublicationById(id: string) {
+export function getPublicationById(
+  id: string
+) {
   return apiRequest<Publication>(
     `/api/publications/${id}`
   );
@@ -97,6 +115,36 @@ export function updatePublicationStatus(
     `/api/publications/${id}/status/${isActive}`,
     {
       method: "PATCH",
+      authenticated: true,
+    }
+  );
+}
+
+export function uploadPublicationImage(
+  id: string,
+  image: File
+) {
+  const formData = new FormData();
+
+  formData.append("image", image);
+
+  return apiRequest<UploadPublicationImageResponse>(
+    `/api/publications/${id}/image`,
+    {
+      method: "POST",
+      authenticated: true,
+      body: formData,
+    }
+  );
+}
+
+export function deletePublicationImage(
+  id: string
+) {
+  return apiRequest<void>(
+    `/api/publications/${id}/image`,
+    {
+      method: "DELETE",
       authenticated: true,
     }
   );

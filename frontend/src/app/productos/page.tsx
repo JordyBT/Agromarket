@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { LucideIcon } from "lucide-react";
+
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,13 +20,17 @@ import {
   Sprout,
   Wheat,
 } from "lucide-react";
+
 import {
   getPublications,
   type Publication,
 } from "@/services/publicationService";
 
-function getIcon(category: string): LucideIcon {
-  const value = category.toLowerCase();
+function getIcon(
+  category: string
+): LucideIcon {
+  const value =
+    category.toLowerCase();
 
   if (
     value.includes("grano") ||
@@ -40,27 +49,40 @@ function getIcon(category: string): LucideIcon {
   return Leaf;
 }
 
-function formatPrice(price: number) {
-  return new Intl.NumberFormat("es-GT", {
-    style: "currency",
-    currency: "GTQ",
-    minimumFractionDigits: 2,
-  }).format(price);
+function formatPrice(
+  price: number
+) {
+  return new Intl.NumberFormat(
+    "es-GT",
+    {
+      style: "currency",
+      currency: "GTQ",
+      minimumFractionDigits: 2,
+    }
+  ).format(price);
 }
 
 export default function ProductosPage() {
-  const [products, setProducts] = useState<
-    Publication[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [products, setProducts] =
+    useState<Publication[]>([]);
 
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  const [search, setSearch] =
+    useState("");
+
   const [category, setCategory] =
     useState("Todos");
+
   const [department, setDepartment] =
     useState("");
-  const [sort, setSort] = useState("recent");
+
+  const [sort, setSort] =
+    useState("recent");
 
   useEffect(() => {
     async function loadProducts() {
@@ -68,7 +90,9 @@ export default function ProductosPage() {
         setLoading(true);
         setError("");
 
-        const data = await getPublications();
+        const data =
+          await getPublications();
+
         setProducts(data);
       } catch (err) {
         setError(
@@ -84,90 +108,128 @@ export default function ProductosPage() {
     loadProducts();
   }, []);
 
-  const categories = useMemo(() => {
-    return [
-      "Todos",
-      ...Array.from(
+  const categories =
+    useMemo(() => {
+      return [
+        "Todos",
+        ...Array.from(
+          new Set(
+            products.map(
+              (product) =>
+                product.category
+            )
+          )
+        ).sort(),
+      ];
+    }, [products]);
+
+  const departments =
+    useMemo(() => {
+      return Array.from(
         new Set(
           products.map(
-            (product) => product.category
+            (product) =>
+              product.department
           )
         )
-      ).sort(),
-    ];
-  }, [products]);
+      ).sort();
+    }, [products]);
 
-  const departments = useMemo(() => {
-    return Array.from(
-      new Set(
-        products.map(
-          (product) => product.department
-        )
-      )
-    ).sort();
-  }, [products]);
+  const filteredProducts =
+    useMemo(() => {
+      const searchValue =
+        search
+          .trim()
+          .toLowerCase();
 
-  const filteredProducts = useMemo(() => {
-    const searchValue = search
-      .trim()
-      .toLowerCase();
+      const result =
+        products.filter(
+          (product) => {
+            const matchesSearch =
+              product.title
+                .toLowerCase()
+                .includes(
+                  searchValue
+                ) ||
+              product.category
+                .toLowerCase()
+                .includes(
+                  searchValue
+                ) ||
+              product.department
+                .toLowerCase()
+                .includes(
+                  searchValue
+                ) ||
+              product.municipality
+                .toLowerCase()
+                .includes(
+                  searchValue
+                ) ||
+              product.seller?.email
+                ?.toLowerCase()
+                .includes(
+                  searchValue
+                );
 
-    const result = products.filter(
-      (product) => {
-        const matchesSearch =
-          product.title
-            .toLowerCase()
-            .includes(searchValue) ||
-          product.category
-            .toLowerCase()
-            .includes(searchValue) ||
-          product.department
-            .toLowerCase()
-            .includes(searchValue) ||
-          product.municipality
-            .toLowerCase()
-            .includes(searchValue) ||
-          product.seller?.email
-            .toLowerCase()
-            .includes(searchValue);
+            const matchesCategory =
+              category ===
+                "Todos" ||
+              product.category ===
+                category;
 
-        const matchesCategory =
-          category === "Todos" ||
-          product.category === category;
+            const matchesDepartment =
+              !department ||
+              product.department ===
+                department;
 
-        const matchesDepartment =
-          !department ||
-          product.department === department;
-
-        return (
-          matchesSearch &&
-          matchesCategory &&
-          matchesDepartment
+            return (
+              matchesSearch &&
+              matchesCategory &&
+              matchesDepartment
+            );
+          }
         );
-      }
-    );
 
-    return [...result].sort((a, b) => {
-      if (sort === "price-asc") {
-        return a.price - b.price;
-      }
+      return [...result].sort(
+        (a, b) => {
+          if (
+            sort ===
+            "price-asc"
+          ) {
+            return (
+              a.price -
+              b.price
+            );
+          }
 
-      if (sort === "price-desc") {
-        return b.price - a.price;
-      }
+          if (
+            sort ===
+            "price-desc"
+          ) {
+            return (
+              b.price -
+              a.price
+            );
+          }
 
-      return (
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
+          return (
+            new Date(
+              b.createdAt
+            ).getTime() -
+            new Date(
+              a.createdAt
+            ).getTime()
+          );
+        }
       );
-    });
-  }, [
-    products,
-    search,
-    category,
-    department,
-    sort,
-  ]);
+    }, [
+      products,
+      search,
+      category,
+      department,
+      sort,
+    ]);
 
   return (
     <main className="min-h-screen bg-[#f4f2ea] text-[#172019]">
@@ -178,7 +240,9 @@ export default function ProductosPage() {
               href="/dashboard"
               className="flex items-center gap-2 text-sm font-medium text-[#626b63] transition-colors hover:text-[#173c29]"
             >
-              <ArrowLeft size={17} />
+              <ArrowLeft
+                size={17}
+              />
               Dashboard
             </Link>
 
@@ -189,7 +253,9 @@ export default function ProductosPage() {
               className="hidden items-center gap-3 sm:flex"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#173c29] text-white">
-                <Sprout size={18} />
+                <Sprout
+                  size={18}
+                />
               </div>
 
               <div>
@@ -228,8 +294,9 @@ export default function ProductosPage() {
               </h1>
 
               <p className="mt-5 max-w-xl text-sm leading-6 text-[#687069] sm:text-base">
-                Explora publicaciones reales de
-                productores y proveedores dentro de
+                Explora publicaciones
+                reales de productores y
+                proveedores dentro de
                 Agromarket.
               </p>
             </div>
@@ -243,8 +310,13 @@ export default function ProductosPage() {
               <input
                 type="text"
                 value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
+                onChange={(
+                  event
+                ) =>
+                  setSearch(
+                    event.target
+                      .value
+                  )
                 }
                 placeholder="Buscar maíz, café, tomate..."
                 className="w-full bg-transparent text-sm outline-none placeholder:text-[#959b96]"
@@ -265,7 +337,9 @@ export default function ProductosPage() {
           <aside className="hidden lg:block">
             <div className="sticky top-6">
               <div className="flex items-center gap-2 border-b border-[#172019]/10 pb-4">
-                <SlidersHorizontal size={17} />
+                <SlidersHorizontal
+                  size={17}
+                />
 
                 <p className="text-sm font-semibold">
                   Filtros
@@ -278,27 +352,40 @@ export default function ProductosPage() {
                 </p>
 
                 <div className="space-y-3">
-                  {categories.map((item) => (
-                    <label
-                      key={item}
-                      className="flex cursor-pointer items-center gap-3"
-                    >
-                      <input
-                        type="radio"
-                        name="category"
-                        value={item}
-                        checked={category === item}
-                        onChange={() =>
-                          setCategory(item)
+                  {categories.map(
+                    (item) => (
+                      <label
+                        key={
+                          item
                         }
-                        className="h-4 w-4 accent-[#173c29]"
-                      />
+                        className="flex cursor-pointer items-center gap-3"
+                      >
+                        <input
+                          type="radio"
+                          name="category"
+                          value={
+                            item
+                          }
+                          checked={
+                            category ===
+                            item
+                          }
+                          onChange={() =>
+                            setCategory(
+                              item
+                            )
+                          }
+                          className="h-4 w-4 accent-[#173c29]"
+                        />
 
-                      <span className="text-sm text-[#626b63]">
-                        {item}
-                      </span>
-                    </label>
-                  ))}
+                        <span className="text-sm text-[#626b63]">
+                          {
+                            item
+                          }
+                        </span>
+                      </label>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -308,26 +395,40 @@ export default function ProductosPage() {
                 </p>
 
                 <select
-                  value={department}
-                  onChange={(event) =>
+                  value={
+                    department
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setDepartment(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   className="w-full rounded-xl border border-[#172019]/15 bg-[#fffdf7] px-4 py-3 text-sm outline-none"
                 >
                   <option value="">
-                    Todos los departamentos
+                    Todos los
+                    departamentos
                   </option>
 
-                  {departments.map((item) => (
-                    <option
-                      key={item}
-                      value={item}
-                    >
-                      {item}
-                    </option>
-                  ))}
+                  {departments.map(
+                    (item) => (
+                      <option
+                        key={
+                          item
+                        }
+                        value={
+                          item
+                        }
+                      >
+                        {
+                          item
+                        }
+                      </option>
+                    )
+                  )}
                 </select>
               </div>
 
@@ -336,9 +437,15 @@ export default function ProductosPage() {
                   type="button"
                   onClick={() => {
                     setSearch("");
-                    setCategory("Todos");
-                    setDepartment("");
-                    setSort("recent");
+                    setCategory(
+                      "Todos"
+                    );
+                    setDepartment(
+                      ""
+                    );
+                    setSort(
+                      "recent"
+                    );
                   }}
                   className="w-full rounded-xl border border-[#172019]/15 bg-[#fffdf7] px-4 py-3 text-sm font-semibold transition-colors hover:bg-[#e8e6da]"
                 >
@@ -356,8 +463,11 @@ export default function ProductosPage() {
                 </p>
 
                 <p className="mt-1 text-xs text-[#777f78]">
-                  {filteredProducts.length}{" "}
-                  {filteredProducts.length === 1
+                  {
+                    filteredProducts.length
+                  }{" "}
+                  {filteredProducts.length ===
+                  1
                     ? "publicación encontrada"
                     : "publicaciones encontradas"}
                 </p>
@@ -368,23 +478,32 @@ export default function ProductosPage() {
                   type="button"
                   className="flex items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-medium lg:hidden"
                 >
-                  <Filter size={16} />
+                  <Filter
+                    size={16}
+                  />
                   Filtros
                 </button>
 
                 <select
                   value={sort}
-                  onChange={(event) =>
-                    setSort(event.target.value)
+                  onChange={(
+                    event
+                  ) =>
+                    setSort(
+                      event.target
+                        .value
+                    )
                   }
                   className="rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-medium outline-none"
                 >
                   <option value="recent">
                     Más recientes
                   </option>
+
                   <option value="price-asc">
                     Menor precio
                   </option>
+
                   <option value="price-desc">
                     Mayor precio
                   </option>
@@ -398,51 +517,92 @@ export default function ProductosPage() {
                   Cargando productos...
                 </p>
               </div>
-            ) : filteredProducts.length > 0 ? (
+            ) : filteredProducts.length >
+              0 ? (
               <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {filteredProducts.map(
                   (product) => {
-                    const Icon = getIcon(
-                      product.category
-                    );
+                    const Icon =
+                      getIcon(
+                        product.category
+                      );
 
                     return (
                       <article
-                        key={product.id}
+                        key={
+                          product.id
+                        }
                         className="group overflow-hidden rounded-3xl border border-[#172019]/10 bg-[#fffdf7] transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-[#173c29]/5"
                       >
-                        <div className="relative flex h-52 items-center justify-center overflow-hidden bg-[#e2e6d7]">
-                          <div className="absolute inset-0 opacity-[0.07]">
-                            <div className="absolute left-1/3 top-0 h-full w-px bg-[#173c29]" />
-                            <div className="absolute left-2/3 top-0 h-full w-px bg-[#173c29]" />
-                            <div className="absolute left-0 top-1/2 h-px w-full bg-[#173c29]" />
-                          </div>
-
-                          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#173c29] text-white">
-                            <Icon
-                              size={38}
-                              strokeWidth={1.5}
+                        <Link
+                          href={`/productos/${product.id}`}
+                          className="relative block h-52 overflow-hidden bg-[#e2e6d7]"
+                        >
+                          {product.imageUrl ? (
+                            <img
+                              src={
+                                product.imageUrl
+                              }
+                              alt={
+                                product.title
+                              }
+                              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
                             />
-                          </div>
+                          ) : (
+                            <div className="relative flex h-full items-center justify-center">
+                              <div className="absolute inset-0 opacity-[0.07]">
+                                <div className="absolute left-1/3 top-0 h-full w-px bg-[#173c29]" />
+                                <div className="absolute left-2/3 top-0 h-full w-px bg-[#173c29]" />
+                                <div className="absolute left-0 top-1/2 h-px w-full bg-[#173c29]" />
+                              </div>
 
-                          <span className="absolute left-4 top-4 rounded-full bg-[#fffdf7] px-3 py-1.5 text-[11px] font-semibold text-[#526057]">
-                            {product.category}
+                              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#173c29] text-white">
+                                <Icon
+                                  size={
+                                    38
+                                  }
+                                  strokeWidth={
+                                    1.5
+                                  }
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <span className="absolute left-4 top-4 rounded-full bg-[#fffdf7]/95 px-3 py-1.5 text-[11px] font-semibold text-[#526057] shadow-sm">
+                            {
+                              product.category
+                            }
                           </span>
-                        </div>
+                        </Link>
 
                         <div className="p-5">
                           <div className="flex items-center gap-1.5 text-xs text-[#7b837c]">
-                            <MapPin size={13} />
-                            {product.municipality},{" "}
-                            {product.department}
+                            <MapPin
+                              size={
+                                13
+                              }
+                            />
+
+                            {
+                              product.municipality
+                            }
+                            ,{" "}
+                            {
+                              product.department
+                            }
                           </div>
 
                           <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em]">
-                            {product.title}
+                            {
+                              product.title
+                            }
                           </h2>
 
                           <p className="mt-1 truncate text-xs text-[#818882]">
-                            {product.seller?.email ??
+                            {product
+                              .seller
+                              ?.email ??
                               "Proveedor Agromarket"}
                           </p>
 
@@ -455,7 +615,10 @@ export default function ProductosPage() {
                               </p>
 
                               <p className="mt-1 text-xs text-[#7a817b]">
-                                por {product.unit}
+                                por{" "}
+                                {
+                                  product.unit
+                                }
                               </p>
                             </div>
 
@@ -465,8 +628,12 @@ export default function ProductosPage() {
                               </p>
 
                               <p className="mt-1 text-xs font-semibold text-[#42694b]">
-                                {product.stock}{" "}
-                                {product.unit}
+                                {
+                                  product.stock
+                                }{" "}
+                                {
+                                  product.unit
+                                }
                               </p>
                             </div>
                           </div>
@@ -478,7 +645,9 @@ export default function ProductosPage() {
                             Ver publicación
 
                             <ArrowRight
-                              size={16}
+                              size={
+                                16
+                              }
                               className="transition-transform group-hover:translate-x-1"
                             />
                           </Link>
@@ -490,14 +659,18 @@ export default function ProductosPage() {
               </div>
             ) : (
               <div className="mt-8 flex min-h-80 flex-col items-center justify-center rounded-3xl border border-dashed border-[#173c29]/20 bg-[#fffdf7]/60 px-6 text-center">
-                <Search size={28} />
+                <Search
+                  size={28}
+                />
 
                 <h2 className="mt-5 text-xl font-semibold">
-                  No encontramos productos
+                  No encontramos
+                  productos
                 </h2>
 
                 <p className="mt-2 max-w-md text-sm leading-6 text-[#747c75]">
-                  Prueba con otra búsqueda o cambia los
+                  Prueba con otra
+                  búsqueda o cambia los
                   filtros.
                 </p>
               </div>
@@ -510,7 +683,9 @@ export default function ProductosPage() {
         <div className="mx-auto flex max-w-[1400px] flex-col justify-between gap-8 px-6 py-12 md:flex-row md:items-center lg:px-10">
           <div>
             <div className="flex items-center gap-2 text-[#b9c995]">
-              <Package size={17} />
+              <Package
+                size={17}
+              />
 
               <p className="text-xs font-semibold uppercase tracking-[0.18em]">
                 Para proveedores
@@ -518,12 +693,15 @@ export default function ProductosPage() {
             </div>
 
             <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.04em]">
-              ¿Tienes producto disponible para vender?
+              ¿Tienes producto
+              disponible para vender?
             </h2>
 
             <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
-              Publica inventario y permite que los
-              compradores encuentren tu oferta.
+              Publica inventario y
+              permite que los
+              compradores encuentren
+              tu oferta.
             </p>
           </div>
 
@@ -532,7 +710,9 @@ export default function ProductosPage() {
             className="flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#f4f2ea] px-6 py-3.5 text-sm font-semibold text-[#173c29]"
           >
             Crear publicación
-            <ArrowRight size={16} />
+            <ArrowRight
+              size={16}
+            />
           </Link>
         </div>
       </section>

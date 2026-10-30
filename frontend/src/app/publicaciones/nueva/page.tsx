@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
+import type {
+  ChangeEvent,
+  FormEvent,
+} from "react";
+
 import {
   ArrowLeft,
   CheckCircle2,
@@ -9,9 +17,14 @@ import {
   MapPin,
   Package,
   Sprout,
+  Trash2,
   Wheat,
 } from "lucide-react";
-import { createPublication } from "@/services/publicationService";
+
+import {
+  createPublication,
+  uploadPublicationImage,
+} from "@/services/publicationService";
 
 type FormData = {
   nombre: string;
@@ -25,7 +38,8 @@ type FormData = {
   municipio: string;
 };
 
-type FormErrors = Partial<Record<keyof FormData, string>>;
+type FormErrors =
+  Partial<Record<keyof FormData, string>>;
 
 const initialForm: FormData = {
   nombre: "",
@@ -39,15 +53,60 @@ const initialForm: FormData = {
   municipio: "",
 };
 
-export default function NuevaPublicacionPage() {
-  const [form, setForm] = useState<FormData>(initialForm);
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [imageCount, setImageCount] = useState(0);
-  const [success, setSuccess] = useState(false);
-  const [serverError, setServerError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const allowedImageTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
 
-  function updateField(field: keyof FormData, value: string) {
+const maxImageSize =
+  5 * 1024 * 1024;
+
+export default function NuevaPublicacionPage() {
+  const [form, setForm] =
+    useState<FormData>(initialForm);
+
+  const [errors, setErrors] =
+    useState<FormErrors>({});
+
+  const [image, setImage] =
+    useState<File | null>(null);
+
+  const [imagePreview, setImagePreview] =
+    useState("");
+
+  const [imageError, setImageError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState(false);
+
+  const [serverError, setServerError] =
+    useState("");
+
+  const [isSubmitting, setIsSubmitting] =
+    useState(false);
+
+  useEffect(() => {
+    if (!image) {
+      setImagePreview("");
+      return;
+    }
+
+    const previewUrl =
+      URL.createObjectURL(image);
+
+    setImagePreview(previewUrl);
+
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [image]);
+
+  function updateField(
+    field: keyof FormData,
+    value: string
+  ) {
     setForm((current) => ({
       ...current,
       [field]: value,
@@ -62,75 +121,159 @@ export default function NuevaPublicacionPage() {
     setServerError("");
   }
 
+  function handleImageChange(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const selected =
+      event.target.files?.[0];
+
+    setImageError("");
+    setSuccess(false);
+
+    if (!selected) {
+      setImage(null);
+      return;
+    }
+
+    if (
+      !allowedImageTypes.includes(
+        selected.type
+      )
+    ) {
+      setImage(null);
+
+      setImageError(
+        "Utiliza una imagen JPG, PNG o WEBP."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    if (selected.size > maxImageSize) {
+      setImage(null);
+
+      setImageError(
+        "La imagen no puede superar los 5 MB."
+      );
+
+      event.target.value = "";
+      return;
+    }
+
+    setImage(selected);
+  }
+
+  function removeImage() {
+    setImage(null);
+    setImageError("");
+
+    const input =
+      document.getElementById(
+        "imagen"
+      ) as HTMLInputElement | null;
+
+    if (input) {
+      input.value = "";
+    }
+  }
+
   function validateForm() {
     const newErrors: FormErrors = {};
 
     if (!form.nombre.trim()) {
-      newErrors.nombre = "Ingresa el nombre del producto.";
+      newErrors.nombre =
+        "Ingresa el nombre del producto.";
     }
 
     if (!form.categoria) {
-      newErrors.categoria = "Selecciona una categoría.";
+      newErrors.categoria =
+        "Selecciona una categoría.";
     }
 
     if (!form.descripcion.trim()) {
-      newErrors.descripcion = "Agrega una descripción del producto.";
-    } else if (form.descripcion.trim().length < 20) {
+      newErrors.descripcion =
+        "Agrega una descripción del producto.";
+    } else if (
+      form.descripcion.trim().length < 20
+    ) {
       newErrors.descripcion =
         "La descripción debe tener al menos 20 caracteres.";
     }
 
-    const precio = Number(form.precio);
+    const precio =
+      Number(form.precio);
 
     if (!form.precio) {
-      newErrors.precio = "Ingresa el precio.";
-    } else if (Number.isNaN(precio) || precio <= 0) {
-      newErrors.precio = "El precio debe ser mayor que cero.";
+      newErrors.precio =
+        "Ingresa el precio.";
+    } else if (
+      Number.isNaN(precio) ||
+      precio <= 0
+    ) {
+      newErrors.precio =
+        "El precio debe ser mayor que cero.";
     }
 
     if (!form.unidad) {
-      newErrors.unidad = "Selecciona una unidad de venta.";
+      newErrors.unidad =
+        "Selecciona una unidad de venta.";
     }
 
-    const inventario = Number(form.inventario);
+    const inventario =
+      Number(form.inventario);
 
     if (!form.inventario) {
-      newErrors.inventario = "Ingresa la cantidad disponible.";
-    } else if (!Number.isInteger(inventario) || inventario <= 0) {
       newErrors.inventario =
-        "La cantidad disponible debe ser un número entero mayor que cero.";
+        "Ingresa la cantidad disponible.";
+    } else if (
+      !Number.isInteger(inventario) ||
+      inventario <= 0
+    ) {
+      newErrors.inventario =
+        "La cantidad debe ser un número entero mayor que cero.";
     }
 
-    const minimo = Number(form.minimo);
+    const minimo =
+      Number(form.minimo);
 
     if (!form.minimo) {
-      newErrors.minimo = "Ingresa la compra mínima.";
-    } else if (!Number.isInteger(minimo) || minimo <= 0) {
       newErrors.minimo =
-        "La compra mínima debe ser un número entero mayor que cero.";
+        "Ingresa la compra mínima.";
     } else if (
-      form.inventario &&
+      !Number.isInteger(minimo) ||
+      minimo <= 0
+    ) {
+      newErrors.minimo =
+        "La compra mínima debe ser mayor que cero.";
+    } else if (
       inventario > 0 &&
       minimo > inventario
     ) {
       newErrors.minimo =
-        "La compra mínima no puede superar el inventario disponible.";
+        "La compra mínima no puede superar el inventario.";
     }
 
     if (!form.departamento) {
-      newErrors.departamento = "Selecciona un departamento.";
+      newErrors.departamento =
+        "Selecciona un departamento.";
     }
 
     if (!form.municipio.trim()) {
-      newErrors.municipio = "Ingresa el municipio.";
+      newErrors.municipio =
+        "Ingresa el municipio.";
     }
 
     setErrors(newErrors);
 
-    return Object.keys(newErrors).length === 0;
+    return (
+      Object.keys(newErrors).length === 0
+    );
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setSuccess(false);
@@ -148,21 +291,58 @@ export default function NuevaPublicacionPage() {
     setIsSubmitting(true);
 
     try {
-      await createPublication({
-        title: form.nombre.trim(),
-        description: form.descripcion.trim(),
-        price: Number(form.precio),
-        stock: Number(form.inventario),
-        unit: form.unidad,
-        category: form.categoria,
-        minimumOrder: Number(form.minimo),
-        department: form.departamento,
-        municipality: form.municipio.trim(),
-      });
+      const publication =
+        await createPublication({
+          title: form.nombre.trim(),
+          description:
+            form.descripcion.trim(),
+          price: Number(form.precio),
+          stock: Number(form.inventario),
+          unit: form.unidad,
+          category: form.categoria,
+          minimumOrder:
+            Number(form.minimo),
+          department:
+            form.departamento,
+          municipality:
+            form.municipio.trim(),
+        });
+
+      if (image) {
+        try {
+          await uploadPublicationImage(
+            publication.id,
+            image
+          );
+        } catch (imageUploadError) {
+          setServerError(
+            imageUploadError instanceof Error
+              ? `La publicación fue creada, pero la imagen no pudo subirse: ${imageUploadError.message}`
+              : "La publicación fue creada, pero la imagen no pudo subirse."
+          );
+
+          window.scrollTo({
+            top: 0,
+            behavior: "smooth",
+          });
+
+          return;
+        }
+      }
 
       setSuccess(true);
       setForm(initialForm);
-      setImageCount(0);
+      setImage(null);
+      setImageError("");
+
+      const input =
+        document.getElementById(
+          "imagen"
+        ) as HTMLInputElement | null;
+
+      if (input) {
+        input.value = "";
+      }
 
       window.scrollTo({
         top: 0,
@@ -196,20 +376,17 @@ export default function NuevaPublicacionPage() {
             Volver al dashboard
           </Link>
 
-          <Link href="/" className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="flex items-center gap-3"
+          >
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#173c29] text-white">
               <Sprout size={18} />
             </div>
 
-            <div className="hidden sm:block">
-              <p className="font-semibold tracking-[-0.03em]">
-                Agromarket
-              </p>
-
-              <p className="text-[10px] uppercase tracking-[0.17em] text-[#7b837c]">
-                Comercio agrícola B2B
-              </p>
-            </div>
+            <span className="font-semibold">
+              Agromarket
+            </span>
           </Link>
         </div>
       </header>
@@ -226,9 +403,16 @@ export default function NuevaPublicacionPage() {
                 Publicación creada correctamente.
               </p>
 
-              <p className="mt-1 text-sm leading-6 text-[#5e695f]">
-                El producto ya fue registrado y guardado en Agromarket.
+              <p className="mt-1 text-sm text-[#5e695f]">
+                El producto y su fotografía ya fueron guardados en Agromarket.
               </p>
+
+              <Link
+                href="/publicaciones"
+                className="mt-3 inline-flex text-sm font-semibold text-[#315f3f] hover:underline"
+              >
+                Ver mis publicaciones
+              </Link>
             </div>
           </div>
         )}
@@ -236,7 +420,7 @@ export default function NuevaPublicacionPage() {
         {serverError && (
           <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 p-5">
             <p className="font-semibold text-red-700">
-              No se pudo crear la publicación.
+              Ocurrió un problema.
             </p>
 
             <p className="mt-1 text-sm text-red-600">
@@ -255,8 +439,7 @@ export default function NuevaPublicacionPage() {
           </h1>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-[#687069] sm:text-base">
-            Completa la información comercial que necesitarán los compradores
-            para evaluar tu oferta.
+            Completa la información comercial y agrega una fotografía real del producto.
           </p>
         </div>
 
@@ -299,13 +482,16 @@ export default function NuevaPublicacionPage() {
                     type="text"
                     value={form.nombre}
                     onChange={(event) =>
-                      updateField("nombre", event.target.value)
+                      updateField(
+                        "nombre",
+                        event.target.value
+                      )
                     }
-                    placeholder="Ej. Maíz amarillo"
-                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none transition ${
+                    placeholder="Ej. Tomate rojo premium"
+                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
                       errors.nombre
                         ? "border-red-500"
-                        : "border-[#172019]/15 focus:border-[#39724a] focus:ring-2 focus:ring-[#39724a]/10"
+                        : "border-[#172019]/15 focus:border-[#39724a]"
                     }`}
                   />
 
@@ -328,16 +514,23 @@ export default function NuevaPublicacionPage() {
                     id="categoria"
                     value={form.categoria}
                     onChange={(event) =>
-                      updateField("categoria", event.target.value)
+                      updateField(
+                        "categoria",
+                        event.target.value
+                      )
                     }
                     className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
                       errors.categoria
                         ? "border-red-500"
-                        : "border-[#172019]/15 focus:border-[#39724a]"
+                        : "border-[#172019]/15"
                     }`}
                   >
-                    <option value="">Selecciona una categoría</option>
-                    <option>Granos y cereales</option>
+                    <option value="">
+                      Selecciona una categoría
+                    </option>
+                    <option>
+                      Granos y cereales
+                    </option>
                     <option>Hortalizas</option>
                     <option>Frutas</option>
                     <option>Café</option>
@@ -365,17 +558,20 @@ export default function NuevaPublicacionPage() {
                     rows={5}
                     value={form.descripcion}
                     onChange={(event) =>
-                      updateField("descripcion", event.target.value)
+                      updateField(
+                        "descripcion",
+                        event.target.value
+                      )
                     }
-                    placeholder="Describe la calidad, presentación, condiciones de almacenamiento y cualquier información relevante."
+                    placeholder="Describe calidad, presentación, almacenamiento y demás información relevante."
                     className={`w-full resize-none rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm leading-6 outline-none ${
                       errors.descripcion
                         ? "border-red-500"
-                        : "border-[#172019]/15 focus:border-[#39724a]"
+                        : "border-[#172019]/15"
                     }`}
                   />
 
-                  <div className="mt-2 flex justify-between gap-4">
+                  <div className="mt-2 flex justify-between">
                     {errors.descripcion ? (
                       <p className="text-xs font-medium text-red-600">
                         {errors.descripcion}
@@ -397,74 +593,59 @@ export default function NuevaPublicacionPage() {
                 <h2 className="font-semibold">
                   Precio e inventario
                 </h2>
-
-                <p className="mt-1 text-xs text-[#7b827c]">
-                  Condiciones iniciales de la oferta
-                </p>
               </div>
 
               <div className="grid gap-5 p-6 sm:grid-cols-2">
                 <div>
-                  <label
-                    htmlFor="precio"
-                    className="mb-2 block text-sm font-semibold"
-                  >
+                  <label className="mb-2 block text-sm font-semibold">
                     Precio
                   </label>
 
-                  <div
-                    className={`flex overflow-hidden rounded-xl border bg-[#f8f6ef] ${
-                      errors.precio
-                        ? "border-red-500"
-                        : "border-[#172019]/15"
-                    }`}
-                  >
+                  <div className="flex overflow-hidden rounded-xl border border-[#172019]/15 bg-[#f8f6ef]">
                     <span className="flex items-center border-r border-[#172019]/10 px-4 font-semibold">
                       Q
                     </span>
 
                     <input
-                      id="precio"
                       type="number"
-                      min="0"
+                      min="0.01"
                       step="0.01"
                       value={form.precio}
                       onChange={(event) =>
-                        updateField("precio", event.target.value)
+                        updateField(
+                          "precio",
+                          event.target.value
+                        )
                       }
-                      placeholder="0.00"
                       className="min-w-0 flex-1 bg-transparent px-4 py-3.5 text-sm outline-none"
                     />
                   </div>
 
                   {errors.precio && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
+                    <p className="mt-2 text-xs text-red-600">
                       {errors.precio}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="unidad"
-                    className="mb-2 block text-sm font-semibold"
-                  >
+                  <label className="mb-2 block text-sm font-semibold">
                     Unidad de venta
                   </label>
 
                   <select
-                    id="unidad"
                     value={form.unidad}
                     onChange={(event) =>
-                      updateField("unidad", event.target.value)
+                      updateField(
+                        "unidad",
+                        event.target.value
+                      )
                     }
-                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
-                      errors.unidad
-                        ? "border-red-500"
-                        : "border-[#172019]/15"
-                    }`}
+                    className="w-full rounded-xl border border-[#172019]/15 bg-[#f8f6ef] px-4 py-3.5 text-sm"
                   >
-                    <option value="">Selecciona una unidad</option>
+                    <option value="">
+                      Selecciona una unidad
+                    </option>
                     <option>Quintal</option>
                     <option>Libra</option>
                     <option>Kilogramo</option>
@@ -474,69 +655,57 @@ export default function NuevaPublicacionPage() {
                   </select>
 
                   {errors.unidad && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
+                    <p className="mt-2 text-xs text-red-600">
                       {errors.unidad}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="inventario"
-                    className="mb-2 block text-sm font-semibold"
-                  >
+                  <label className="mb-2 block text-sm font-semibold">
                     Cantidad disponible
                   </label>
 
                   <input
-                    id="inventario"
                     type="number"
                     min="1"
                     value={form.inventario}
                     onChange={(event) =>
-                      updateField("inventario", event.target.value)
+                      updateField(
+                        "inventario",
+                        event.target.value
+                      )
                     }
-                    placeholder="Ej. 240"
-                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
-                      errors.inventario
-                        ? "border-red-500"
-                        : "border-[#172019]/15"
-                    }`}
+                    className="w-full rounded-xl border border-[#172019]/15 bg-[#f8f6ef] px-4 py-3.5 text-sm"
                   />
 
                   {errors.inventario && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
+                    <p className="mt-2 text-xs text-red-600">
                       {errors.inventario}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="minimo"
-                    className="mb-2 block text-sm font-semibold"
-                  >
+                  <label className="mb-2 block text-sm font-semibold">
                     Compra mínima
                   </label>
 
                   <input
-                    id="minimo"
                     type="number"
                     min="1"
                     value={form.minimo}
                     onChange={(event) =>
-                      updateField("minimo", event.target.value)
+                      updateField(
+                        "minimo",
+                        event.target.value
+                      )
                     }
-                    placeholder="Ej. 10"
-                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
-                      errors.minimo
-                        ? "border-red-500"
-                        : "border-[#172019]/15"
-                    }`}
+                    className="w-full rounded-xl border border-[#172019]/15 bg-[#f8f6ef] px-4 py-3.5 text-sm"
                   />
 
                   {errors.minimo && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
+                    <p className="mt-2 text-xs text-red-600">
                       {errors.minimo}
                     </p>
                   )}
@@ -547,40 +716,32 @@ export default function NuevaPublicacionPage() {
             <section className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7]">
               <div className="border-b border-[#172019]/10 px-6 py-5">
                 <div className="flex items-center gap-3">
-                  <MapPin size={18} className="text-[#315f3f]" />
+                  <MapPin
+                    size={18}
+                    className="text-[#315f3f]"
+                  />
 
-                  <div>
-                    <h2 className="font-semibold">
-                      Ubicación
-                    </h2>
-
-                    <p className="mt-1 text-xs text-[#7b827c]">
-                      Lugar donde se encuentra el producto
-                    </p>
-                  </div>
+                  <h2 className="font-semibold">
+                    Ubicación
+                  </h2>
                 </div>
               </div>
 
               <div className="grid gap-5 p-6 sm:grid-cols-2">
                 <div>
-                  <label
-                    htmlFor="departamento"
-                    className="mb-2 block text-sm font-semibold"
-                  >
+                  <label className="mb-2 block text-sm font-semibold">
                     Departamento
                   </label>
 
                   <select
-                    id="departamento"
                     value={form.departamento}
                     onChange={(event) =>
-                      updateField("departamento", event.target.value)
+                      updateField(
+                        "departamento",
+                        event.target.value
+                      )
                     }
-                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
-                      errors.departamento
-                        ? "border-red-500"
-                        : "border-[#172019]/15"
-                    }`}
+                    className="w-full rounded-xl border border-[#172019]/15 bg-[#f8f6ef] px-4 py-3.5 text-sm"
                   >
                     <option value="">
                       Selecciona un departamento
@@ -591,39 +752,38 @@ export default function NuevaPublicacionPage() {
                     <option>Jutiapa</option>
                     <option>Izabal</option>
                     <option>Guatemala</option>
+                    <option>Petén</option>
+                    <option>Alta Verapaz</option>
+                    <option>Baja Verapaz</option>
+                    <option>Huehuetenango</option>
                   </select>
 
                   {errors.departamento && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
+                    <p className="mt-2 text-xs text-red-600">
                       {errors.departamento}
                     </p>
                   )}
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="municipio"
-                    className="mb-2 block text-sm font-semibold"
-                  >
+                  <label className="mb-2 block text-sm font-semibold">
                     Municipio
                   </label>
 
                   <input
-                    id="municipio"
                     value={form.municipio}
                     onChange={(event) =>
-                      updateField("municipio", event.target.value)
+                      updateField(
+                        "municipio",
+                        event.target.value
+                      )
                     }
                     placeholder="Ej. Zacapa"
-                    className={`w-full rounded-xl border bg-[#f8f6ef] px-4 py-3.5 text-sm outline-none ${
-                      errors.municipio
-                        ? "border-red-500"
-                        : "border-[#172019]/15"
-                    }`}
+                    className="w-full rounded-xl border border-[#172019]/15 bg-[#f8f6ef] px-4 py-3.5 text-sm"
                   />
 
                   {errors.municipio && (
-                    <p className="mt-2 text-xs font-medium text-red-600">
+                    <p className="mt-2 text-xs text-red-600">
                       {errors.municipio}
                     </p>
                   )}
@@ -633,52 +793,95 @@ export default function NuevaPublicacionPage() {
 
             <section className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6">
               <p className="font-semibold">
-                Fotografías
+                Fotografía principal
               </p>
 
               <p className="mt-1 text-xs text-[#7b827c]">
-                La carga de fotografías se conectará posteriormente.
+                JPG, PNG o WEBP. Máximo 5 MB.
               </p>
 
-              <label
-                htmlFor="imagenes"
-                className="mt-5 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#173c29]/25 bg-[#f3f3e9] px-6 text-center transition hover:bg-[#eceee2]"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#173c29] text-white">
-                  <ImagePlus size={19} />
+              {!imagePreview ? (
+                <label
+                  htmlFor="imagen"
+                  className="mt-5 flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-[#173c29]/25 bg-[#f3f3e9] px-6 text-center transition hover:bg-[#eceee2]"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#173c29] text-white">
+                    <ImagePlus size={19} />
+                  </div>
+
+                  <p className="mt-4 text-sm font-semibold">
+                    Seleccionar fotografía
+                  </p>
+
+                  <p className="mt-2 text-xs text-[#777f78]">
+                    Haz clic para elegir una imagen.
+                  </p>
+                </label>
+              ) : (
+                <div className="mt-5 overflow-hidden rounded-2xl border border-[#172019]/10">
+                  <img
+                    src={imagePreview}
+                    alt="Vista previa del producto"
+                    className="h-64 w-full object-cover"
+                  />
+
+                  <div className="flex items-center justify-between bg-[#f8f6ef] p-4">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {image?.name}
+                      </p>
+
+                      <p className="mt-1 text-xs text-[#777f78]">
+                        {image
+                          ? `${(
+                              image.size /
+                              1024 /
+                              1024
+                            ).toFixed(2)} MB`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50"
+                      aria-label="Eliminar fotografía"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
+              )}
 
-                <p className="mt-4 text-sm font-semibold">
-                  Seleccionar fotografías
+              <input
+                id="imagen"
+                type="file"
+                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleImageChange}
+              />
+
+              {imageError && (
+                <p className="mt-3 text-xs font-medium text-red-600">
+                  {imageError}
                 </p>
+              )}
 
-                <p className="mt-2 text-xs text-[#777f78]">
-                  {imageCount === 0
-                    ? "Todavía no has seleccionado imágenes."
-                    : `${imageCount} ${
-                        imageCount === 1
-                          ? "imagen seleccionada"
-                          : "imágenes seleccionadas"
-                      }`}
-                </p>
-
-                <input
-                  id="imagenes"
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) =>
-                    setImageCount(event.target.files?.length ?? 0)
-                  }
-                />
-              </label>
+              {imagePreview && (
+                <label
+                  htmlFor="imagen"
+                  className="mt-4 inline-flex cursor-pointer text-sm font-semibold text-[#315f3f] hover:underline"
+                >
+                  Cambiar fotografía
+                </label>
+              )}
             </section>
 
             <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row">
               <Link
                 href="/dashboard"
-                className="flex items-center justify-center rounded-full border border-[#172019]/15 px-6 py-3.5 text-sm font-semibold transition hover:bg-[#e8e6da]"
+                className="flex items-center justify-center rounded-full border border-[#172019]/15 px-6 py-3.5 text-sm font-semibold hover:bg-[#e8e6da]"
               >
                 Cancelar
               </Link>
@@ -686,7 +889,7 @@ export default function NuevaPublicacionPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="cursor-pointer rounded-full bg-[#173c29] px-8 py-3.5 text-sm font-semibold text-white transition hover:bg-[#24583b] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full bg-[#173c29] px-8 py-3.5 text-sm font-semibold text-white hover:bg-[#24583b] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting
                   ? "Publicando..."
@@ -696,7 +899,7 @@ export default function NuevaPublicacionPage() {
           </div>
 
           <aside>
-            <div className="sticky top-6 space-y-5">
+            <div className="sticky top-6">
               <section className="rounded-3xl bg-[#173c29] p-6 text-white">
                 <Package size={20} />
 
@@ -705,36 +908,47 @@ export default function NuevaPublicacionPage() {
                 </h2>
 
                 <p className="mt-2 text-sm text-white/50">
-                  Así empieza a verse tu publicación.
+                  Así se verá parte de tu publicación.
                 </p>
 
-                <div className="mt-7 rounded-2xl bg-[#f4f2ea] p-5 text-[#172019]">
-                  <div className="flex h-32 items-center justify-center rounded-xl bg-[#dfe4d3]">
-                    <Wheat
-                      size={42}
-                      className="text-[#173c29]"
-                      strokeWidth={1.5}
+                <div className="mt-7 overflow-hidden rounded-2xl bg-[#f4f2ea] text-[#172019]">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Producto"
+                      className="h-44 w-full object-cover"
                     />
-                  </div>
+                  ) : (
+                    <div className="flex h-44 items-center justify-center bg-[#dfe4d3]">
+                      <Wheat
+                        size={42}
+                        className="text-[#173c29]"
+                        strokeWidth={1.5}
+                      />
+                    </div>
+                  )}
 
-                  <p className="mt-5 text-xs font-semibold uppercase tracking-[0.15em] text-[#617063]">
-                    {form.categoria || "Categoría"}
-                  </p>
+                  <div className="p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#617063]">
+                      {form.categoria ||
+                        "Categoría"}
+                    </p>
 
-                  <h3 className="mt-2 text-xl font-semibold">
-                    {form.nombre || "Nombre del producto"}
-                  </h3>
+                    <h3 className="mt-2 text-xl font-semibold">
+                      {form.nombre ||
+                        "Nombre del producto"}
+                    </h3>
 
-                  <div className="mt-3 flex items-center gap-1.5 text-xs text-[#757d76]">
-                    <MapPin size={13} />
+                    <div className="mt-3 flex items-center gap-1.5 text-xs text-[#757d76]">
+                      <MapPin size={13} />
 
-                    {form.municipio && form.departamento
-                      ? `${form.municipio}, ${form.departamento}`
-                      : "Ubicación"}
-                  </div>
+                      {form.municipio &&
+                      form.departamento
+                        ? `${form.municipio}, ${form.departamento}`
+                        : "Ubicación"}
+                    </div>
 
-                  <div className="mt-5 border-t border-[#172019]/10 pt-4">
-                    <div className="flex items-end justify-between">
+                    <div className="mt-5 flex items-end justify-between border-t border-[#172019]/10 pt-4">
                       <div>
                         <p className="text-xs text-[#858c86]">
                           Precio
@@ -742,7 +956,9 @@ export default function NuevaPublicacionPage() {
 
                         <p className="mt-1 text-lg font-semibold">
                           {form.precio
-                            ? `Q ${Number(form.precio).toFixed(2)}`
+                            ? `Q ${Number(
+                                form.precio
+                              ).toFixed(2)}`
                             : "Q 0.00"}
                         </p>
 
@@ -759,24 +975,12 @@ export default function NuevaPublicacionPage() {
                         </p>
 
                         <p className="mt-1 text-sm font-semibold">
-                          {form.inventario || "—"}
+                          {form.inventario ||
+                            "—"}
                         </p>
                       </div>
                     </div>
                   </div>
-                </div>
-              </section>
-
-              <section className="rounded-3xl border border-[#172019]/10 bg-[#fffdf7] p-6">
-                <p className="font-semibold">
-                  Antes de publicar
-                </p>
-
-                <div className="mt-5 space-y-4 text-sm text-[#687069]">
-                  <p>• Verifica el precio.</p>
-                  <p>• Mantén actualizado el inventario.</p>
-                  <p>• Utiliza una descripción clara.</p>
-                  <p>• Agrega fotografías reales.</p>
                 </div>
               </section>
             </div>
