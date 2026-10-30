@@ -22,6 +22,74 @@ namespace Agromarket.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Agromarket.Domain.Entities.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("SenderId");
+
+                    b.HasIndex("ConversationId", "CreatedAt");
+
+                    b.ToTable("ChatMessages");
+                });
+
+            modelBuilder.Entity("Agromarket.Domain.Entities.Conversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuyerId");
+
+                    b.HasIndex("ProviderId");
+
+                    b.HasIndex("PublicationId");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.HasIndex("PublicationId", "BuyerId", "ProviderId")
+                        .IsUnique();
+
+                    b.ToTable("Conversations");
+                });
+
             modelBuilder.Entity("Agromarket.Domain.Entities.Favorite", b =>
                 {
                     b.Property<Guid>("Id")
@@ -156,6 +224,43 @@ namespace Agromarket.Infrastructure.Migrations
                     b.ToTable("Reservations");
                 });
 
+            modelBuilder.Entity("Agromarket.Domain.Entities.Review", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BuyerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProviderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ReservationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuyerId");
+
+                    b.HasIndex("ProviderId");
+
+                    b.HasIndex("ReservationId")
+                        .IsUnique();
+
+                    b.ToTable("Reviews");
+                });
+
             modelBuilder.Entity("Agromarket.Domain.Entities.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -277,6 +382,52 @@ namespace Agromarket.Infrastructure.Migrations
                     b.ToTable("UserProfiles");
                 });
 
+            modelBuilder.Entity("Agromarket.Domain.Entities.ChatMessage", b =>
+                {
+                    b.HasOne("Agromarket.Domain.Entities.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Agromarket.Domain.Entities.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("Agromarket.Domain.Entities.Conversation", b =>
+                {
+                    b.HasOne("Agromarket.Domain.Entities.User", "Buyer")
+                        .WithMany()
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Agromarket.Domain.Entities.User", "Provider")
+                        .WithMany()
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Agromarket.Domain.Entities.Publication", "Publication")
+                        .WithMany()
+                        .HasForeignKey("PublicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Buyer");
+
+                    b.Navigation("Provider");
+
+                    b.Navigation("Publication");
+                });
+
             modelBuilder.Entity("Agromarket.Domain.Entities.Favorite", b =>
                 {
                     b.HasOne("Agromarket.Domain.Entities.Publication", "Publication")
@@ -326,6 +477,33 @@ namespace Agromarket.Infrastructure.Migrations
                     b.Navigation("Publication");
                 });
 
+            modelBuilder.Entity("Agromarket.Domain.Entities.Review", b =>
+                {
+                    b.HasOne("Agromarket.Domain.Entities.User", "Buyer")
+                        .WithMany("ReviewsAsBuyer")
+                        .HasForeignKey("BuyerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Agromarket.Domain.Entities.User", "Provider")
+                        .WithMany("ReviewsAsProvider")
+                        .HasForeignKey("ProviderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Agromarket.Domain.Entities.Reservation", "Reservation")
+                        .WithOne("Review")
+                        .HasForeignKey("Agromarket.Domain.Entities.Review", "ReservationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Buyer");
+
+                    b.Navigation("Provider");
+
+                    b.Navigation("Reservation");
+                });
+
             modelBuilder.Entity("Agromarket.Domain.Entities.User", b =>
                 {
                     b.HasOne("Agromarket.Domain.Entities.Role", "Role")
@@ -348,11 +526,21 @@ namespace Agromarket.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Agromarket.Domain.Entities.Conversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("Agromarket.Domain.Entities.Publication", b =>
                 {
                     b.Navigation("Favorites");
 
                     b.Navigation("Reservations");
+                });
+
+            modelBuilder.Entity("Agromarket.Domain.Entities.Reservation", b =>
+                {
+                    b.Navigation("Review");
                 });
 
             modelBuilder.Entity("Agromarket.Domain.Entities.Role", b =>
@@ -369,6 +557,10 @@ namespace Agromarket.Infrastructure.Migrations
                     b.Navigation("Publications");
 
                     b.Navigation("ReservationsAsBuyer");
+
+                    b.Navigation("ReviewsAsBuyer");
+
+                    b.Navigation("ReviewsAsProvider");
                 });
 #pragma warning restore 612, 618
         }

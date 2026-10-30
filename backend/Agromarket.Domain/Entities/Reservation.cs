@@ -31,4 +31,6 @@ public class Reservation
     public Publication Publication { get; set; } = null!;
 
     public User Buyer { get; set; } = null!;
+
+    public Review? Review { get; set; }
 }

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
 import {
   useEffect,
   useMemo,
@@ -15,9 +18,11 @@ import {
   Heart,
   Leaf,
   MapPin,
+  MessageCircle,
   PackageCheck,
   ShieldCheck,
   Sprout,
+  Star,
   Store,
   Truck,
 } from "lucide-react";
@@ -38,44 +43,70 @@ import {
 } from "@/services/favoriteService";
 
 import {
+  getProviderReviews,
+  type ProviderReputation,
+} from "@/services/reviewService";
+
+import {
+  startConversation,
+} from "@/services/chatService";
+
+import {
   getUser,
 } from "@/services/sessionService";
 
 function formatPrice(value: number) {
-  return new Intl.NumberFormat("es-GT", {
-    style: "currency",
-    currency: "GTQ",
-    minimumFractionDigits: 2,
-  }).format(value);
+  return new Intl.NumberFormat(
+    "es-GT",
+    {
+      style: "currency",
+      currency: "GTQ",
+      minimumFractionDigits: 2,
+    }
+  ).format(value);
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("es-GT", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
+  return new Intl.DateTimeFormat(
+    "es-GT",
+    {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }
+  ).format(new Date(value));
 }
 
 export default function ProductoDetallePage() {
   const params = useParams();
+  const router = useRouter();
 
   const id =
     typeof params.id === "string"
       ? params.id
       : "";
 
-  const [publication, setPublication] =
-    useState<Publication | null>(null);
+  const [
+    publication,
+    setPublication,
+  ] = useState<Publication | null>(
+    null
+  );
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] =
-    useState("");
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const [quantity, setQuantity] =
-    useState("");
+  const [
+    quantity,
+    setQuantity,
+  ] = useState("");
 
   const [
     reservationError,
@@ -105,6 +136,29 @@ export default function ProductoDetallePage() {
   const [
     favoriteError,
     setFavoriteError,
+  ] = useState("");
+
+  const [
+    reputation,
+    setReputation,
+  ] =
+    useState<ProviderReputation | null>(
+      null
+    );
+
+  const [
+    reputationLoading,
+    setReputationLoading,
+  ] = useState(false);
+
+  const [
+    chatLoading,
+    setChatLoading,
+  ] = useState(false);
+
+  const [
+    chatError,
+    setChatError,
   ] = useState("");
 
   const user = useMemo(
@@ -173,6 +227,35 @@ export default function ProductoDetallePage() {
 
     loadFavoriteStatus();
   }, [id, isBuyer]);
+
+  useEffect(() => {
+    async function loadReputation() {
+      const providerId =
+        publication?.seller?.id;
+
+      if (!providerId) {
+        setReputation(null);
+        return;
+      }
+
+      try {
+        setReputationLoading(true);
+
+        const data =
+          await getProviderReviews(
+            providerId
+          );
+
+        setReputation(data);
+      } catch {
+        setReputation(null);
+      } finally {
+        setReputationLoading(false);
+      }
+    }
+
+    loadReputation();
+  }, [publication?.seller?.id]);
 
   async function handleFavorite() {
     if (
@@ -263,6 +346,7 @@ export default function ProductoDetallePage() {
       await createReservation({
         publicationId:
           publication.id,
+
         quantity:
           numericQuantity,
       });
@@ -278,6 +362,37 @@ export default function ProductoDetallePage() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleStartConversation() {
+    if (
+      !publication ||
+      !isBuyer
+    ) {
+      return;
+    }
+
+    try {
+      setChatLoading(true);
+      setChatError("");
+
+      const result =
+        await startConversation(
+          publication.id
+        );
+
+      router.push(
+        `/mensajes?conversation=${result.id}`
+      );
+    } catch (err) {
+      setChatError(
+        err instanceof Error
+          ? err.message
+          : "No fue posible iniciar la conversación."
+      );
+    } finally {
+      setChatLoading(false);
     }
   }
 
@@ -299,7 +414,8 @@ export default function ProductoDetallePage() {
       <main className="flex min-h-screen items-center justify-center bg-[#f4f2ea] px-6 text-[#172019]">
         <div className="max-w-md rounded-3xl border border-red-200 bg-red-50 p-6 text-center">
           <p className="font-semibold text-red-700">
-            No fue posible cargar el producto.
+            No fue posible cargar el
+            producto.
           </p>
 
           <p className="mt-2 text-sm text-red-600">
@@ -337,22 +453,46 @@ export default function ProductoDetallePage() {
 
           <div className="flex items-center gap-3">
             {isBuyer && (
-              <Link
-                href="/favoritos"
-                className="hidden items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-semibold transition hover:bg-[#ecebe3] sm:flex"
-              >
-                <Heart size={16} />
-                Favoritos
-              </Link>
+              <>
+                <Link
+                  href="/mensajes"
+                  className="hidden items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-semibold transition hover:bg-[#ecebe3] sm:flex"
+                >
+                  <MessageCircle
+                    size={16}
+                  />
+                  Mensajes
+                </Link>
+
+                <Link
+                  href="/favoritos"
+                  className="hidden items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-semibold transition hover:bg-[#ecebe3] sm:flex"
+                >
+                  <Heart size={16} />
+                  Favoritos
+                </Link>
+              </>
             )}
 
             {isProvider && (
-              <Link
-                href="/publicaciones/nueva"
-                className="hidden rounded-full bg-[#173c29] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#24583b] sm:block"
-              >
-                Publicar producto
-              </Link>
+              <>
+                <Link
+                  href="/mensajes"
+                  className="hidden items-center gap-2 rounded-full border border-[#172019]/15 bg-[#fffdf7] px-4 py-2.5 text-sm font-semibold transition hover:bg-[#ecebe3] sm:flex"
+                >
+                  <MessageCircle
+                    size={16}
+                  />
+                  Mensajes
+                </Link>
+
+                <Link
+                  href="/publicaciones/nueva"
+                  className="hidden rounded-full bg-[#173c29] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#24583b] sm:block"
+                >
+                  Publicar producto
+                </Link>
+              </>
             )}
 
             <Link
@@ -536,14 +676,17 @@ export default function ProductoDetallePage() {
             <section className="overflow-hidden rounded-3xl border border-[#172019]/10 bg-[#fffdf7]">
               <div className="border-b border-[#172019]/10 px-6 py-5">
                 <h2 className="font-semibold">
-                  Condiciones de la publicación
+                  Condiciones de la
+                  publicación
                 </h2>
               </div>
 
               <div className="grid md:grid-cols-3">
                 <div className="border-b border-[#172019]/10 p-6 md:border-b-0 md:border-r">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e4e8d8] text-[#315f3f]">
-                    <Boxes size={17} />
+                    <Boxes
+                      size={17}
+                    />
                   </div>
 
                   <p className="mt-5 text-sm font-semibold">
@@ -562,7 +705,9 @@ export default function ProductoDetallePage() {
 
                 <div className="border-b border-[#172019]/10 p-6 md:border-b-0 md:border-r">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e4e8d8] text-[#315f3f]">
-                    <Truck size={17} />
+                    <Truck
+                      size={17}
+                    />
                   </div>
 
                   <p className="mt-5 text-sm font-semibold">
@@ -570,7 +715,8 @@ export default function ProductoDetallePage() {
                   </p>
 
                   <p className="mt-2 text-sm text-[#727a73]">
-                    A coordinar con el proveedor
+                    A coordinar con el
+                    proveedor
                   </p>
                 </div>
 
@@ -723,7 +869,9 @@ export default function ProductoDetallePage() {
                     }
                     step="1"
                     value={quantity}
-                    onChange={(event) => {
+                    onChange={(
+                      event
+                    ) => {
                       setQuantity(
                         event.target.value
                       );
@@ -748,14 +896,17 @@ export default function ProductoDetallePage() {
                 </div>
               </div>
 
-              {Number(quantity) > 0 && (
+              {Number(quantity) >
+                0 && (
                 <div className="mt-3 flex items-center justify-between text-xs text-[#737b74]">
                   <span>
                     Total estimado
                   </span>
 
                   <span className="font-semibold text-[#172019]">
-                    {formatPrice(total)}
+                    {formatPrice(
+                      total
+                    )}
                   </span>
                 </div>
               )}
@@ -784,12 +935,16 @@ export default function ProductoDetallePage() {
                   <PackageCheck
                     size={17}
                   />
-                  Iniciar sesión para reservar
+
+                  Iniciar sesión para
+                  reservar
                 </Link>
               ) : isBuyer ? (
                 <button
                   type="button"
-                  disabled={isSubmitting}
+                  disabled={
+                    isSubmitting
+                  }
                   onClick={
                     handleReservation
                   }
@@ -812,7 +967,9 @@ export default function ProductoDetallePage() {
                   <PackageCheck
                     size={17}
                   />
-                  Solo compradores pueden reservar
+
+                  Solo compradores pueden
+                  reservar
                 </button>
               )}
 
@@ -823,7 +980,10 @@ export default function ProductoDetallePage() {
                 />
 
                 <p className="text-xs leading-5 text-[#687069]">
-                  La solicitud no descuenta inventario hasta que el proveedor la acepte.
+                  La solicitud no
+                  descuenta inventario
+                  hasta que el proveedor
+                  la acepte.
                 </p>
               </div>
             </section>
@@ -834,17 +994,201 @@ export default function ProductoDetallePage() {
                   <Store size={18} />
                 </div>
 
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold">
                     Proveedor
                   </p>
 
                   <p className="mt-1 truncate text-xs text-[#737b74]">
-                    {publication.seller?.email ??
+                    {publication.seller
+                      ?.email ??
                       "Proveedor de Agromarket"}
                   </p>
                 </div>
               </div>
+
+              <div className="mt-6 border-t border-[#172019]/10 pt-5">
+                <p className="text-xs uppercase tracking-[0.12em] text-[#818881]">
+                  Reputación
+                </p>
+
+                {reputationLoading ? (
+                  <p className="mt-3 text-sm text-[#737b74]">
+                    Cargando reputación...
+                  </p>
+                ) : reputation &&
+                  reputation.totalReviews >
+                    0 ? (
+                  <>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        {[
+                          1,
+                          2,
+                          3,
+                          4,
+                          5,
+                        ].map(
+                          (star) => (
+                            <Star
+                              key={
+                                star
+                              }
+                              size={
+                                18
+                              }
+                              className={
+                                star <=
+                                Math.round(
+                                  reputation.averageRating
+                                )
+                                  ? "fill-[#b88b24] text-[#b88b24]"
+                                  : "text-[#cbc9bd]"
+                              }
+                            />
+                          )
+                        )}
+                      </div>
+
+                      <span className="text-lg font-semibold">
+                        {reputation.averageRating.toFixed(
+                          1
+                        )}
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-xs text-[#737b74]">
+                      Basado en{" "}
+                      {
+                        reputation.totalReviews
+                      }{" "}
+                      {reputation.totalReviews ===
+                      1
+                        ? "reseña"
+                        : "reseñas"}
+                    </p>
+                  </>
+                ) : (
+                  <div className="mt-3">
+                    <div className="flex gap-1">
+                      {[
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                      ].map(
+                        (star) => (
+                          <Star
+                            key={
+                              star
+                            }
+                            size={
+                              18
+                            }
+                            className="text-[#cbc9bd]"
+                          />
+                        )
+                      )}
+                    </div>
+
+                    <p className="mt-2 text-xs text-[#737b74]">
+                      Este proveedor
+                      todavía no tiene
+                      reseñas.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {reputation &&
+                reputation.reviews
+                  .length > 0 && (
+                  <div className="mt-6 border-t border-[#172019]/10 pt-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#818881]">
+                      Opiniones recientes
+                    </p>
+
+                    <div className="mt-4 space-y-4">
+                      {reputation.reviews
+                        .slice(0, 3)
+                        .map(
+                          (review) => {
+                            const buyerName =
+                              `${review.buyer.firstName ?? ""} ${review.buyer.lastName ?? ""}`.trim();
+
+                            return (
+                              <article
+                                key={
+                                  review.id
+                                }
+                                className="rounded-2xl bg-[#f1efe5] p-4"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex gap-0.5">
+                                    {[
+                                      1,
+                                      2,
+                                      3,
+                                      4,
+                                      5,
+                                    ].map(
+                                      (
+                                        star
+                                      ) => (
+                                        <Star
+                                          key={
+                                            star
+                                          }
+                                          size={
+                                            14
+                                          }
+                                          className={
+                                            star <=
+                                            review.rating
+                                              ? "fill-[#b88b24] text-[#b88b24]"
+                                              : "text-[#cbc9bd]"
+                                          }
+                                        />
+                                      )
+                                    )}
+                                  </div>
+
+                                  <span className="text-[10px] text-[#898f89]">
+                                    {formatDate(
+                                      review.createdAt
+                                    )}
+                                  </span>
+                                </div>
+
+                                <p className="mt-3 text-xs font-semibold">
+                                  {buyerName ||
+                                    "Comprador verificado"}
+                                </p>
+
+                                <p className="mt-1 text-[11px] text-[#858c86]">
+                                  Compra de{" "}
+                                  {
+                                    review
+                                      .publication
+                                      .title
+                                  }
+                                </p>
+
+                                {review.comment && (
+                                  <p className="mt-3 text-sm leading-6 text-[#616a62]">
+                                    {
+                                      review.comment
+                                    }
+                                  </p>
+                                )}
+                              </article>
+                            );
+                          }
+                        )}
+                    </div>
+                  </div>
+                )}
 
               <div className="mt-6 border-t border-[#172019]/10 pt-5">
                 <p className="text-xs text-[#818881]">
@@ -856,12 +1200,40 @@ export default function ProductoDetallePage() {
                 </p>
               </div>
 
-              {publication.seller?.email && (
+              {chatError && (
+                <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+                  {chatError}
+                </div>
+              )}
+
+              {isBuyer && (
+                <button
+                  type="button"
+                  onClick={
+                    handleStartConversation
+                  }
+                  disabled={
+                    chatLoading
+                  }
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#173c29] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#24583b] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <MessageCircle
+                    size={17}
+                  />
+
+                  {chatLoading
+                    ? "Abriendo conversación..."
+                    : "Enviar mensaje"}
+                </button>
+              )}
+
+              {publication.seller
+                ?.email && (
                 <a
                   href={`mailto:${publication.seller.email}`}
-                  className="mt-6 flex w-full items-center justify-center rounded-xl border border-[#172019]/15 px-5 py-3.5 text-sm font-semibold transition hover:bg-[#f0efe6]"
+                  className="mt-3 flex w-full items-center justify-center rounded-xl border border-[#172019]/15 px-5 py-3.5 text-sm font-semibold transition hover:bg-[#f0efe6]"
                 >
-                  Contactar proveedor
+                  Contactar por correo
                 </a>
               )}
             </section>

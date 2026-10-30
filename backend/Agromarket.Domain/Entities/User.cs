@@ -27,4 +27,10 @@ public class User
 
     public ICollection<Favorite> Favorites { get; set; }
         = new List<Favorite>();
+
+    public ICollection<Review> ReviewsAsBuyer { get; set; }
+        = new List<Review>();
+
+    public ICollection<Review> ReviewsAsProvider { get; set; }
+        = new List<Review>();
 }
