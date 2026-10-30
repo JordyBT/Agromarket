@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Agromarket.Api.Services;
 using Agromarket.Application.DTOs;
 using Agromarket.Domain.Entities;
 using Agromarket.Infrastructure.Data;
@@ -13,7 +14,7 @@ namespace Agromarket.Api.Controllers;
 public class PublicationsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
-    private readonly IWebHostEnvironment _environment;
+    private readonly SupabaseStorageService _storage;
 
     private const long MaxImageSize =
         5 * 1024 * 1024;
@@ -35,10 +36,14 @@ public class PublicationsController : ControllerBase
 
     public PublicationsController(
         ApplicationDbContext context,
-        IWebHostEnvironment environment)
+        IConfiguration configuration)
     {
         _context = context;
-        _environment = environment;
+
+        _storage =
+            new SupabaseStorageService(
+                configuration
+            );
     }
 
     [HttpGet]
@@ -304,13 +309,18 @@ public class PublicationsController : ControllerBase
             new Publication
             {
                 Id = Guid.NewGuid(),
-                UserId = userId.Value,
-                Title = request.Title.Trim(),
+                UserId =
+                    userId.Value,
+                Title =
+                    request.Title.Trim(),
                 Description =
                     request.Description.Trim(),
-                Price = request.Price,
-                Stock = request.Stock,
-                Unit = request.Unit.Trim(),
+                Price =
+                    request.Price,
+                Stock =
+                    request.Stock,
+                Unit =
+                    request.Unit.Trim(),
                 Category =
                     request.Category.Trim(),
                 MinimumOrder =
@@ -336,11 +346,13 @@ public class PublicationsController : ControllerBase
             nameof(GetById),
             new
             {
-                id = publication.Id
+                id =
+                    publication.Id
             },
             ToResponse(
                 publication,
-                user.Email)
+                user.Email
+            )
         );
     }
 
@@ -453,13 +465,15 @@ public class PublicationsController : ControllerBase
                 .Where(x =>
                     x.Id ==
                     publication.UserId)
-                .Select(x => x.Email)
+                .Select(x =>
+                    x.Email)
                 .FirstOrDefaultAsync();
 
         return Ok(
             ToResponse(
                 publication,
-                email)
+                email
+            )
         );
     }
 
@@ -572,15 +586,15 @@ public class PublicationsController : ControllerBase
 
         var extension =
             Path.GetExtension(
-                image.FileName)
-                .ToLowerInvariant();
+                image.FileName
+            )
+            .ToLowerInvariant();
 
         if (
             string.IsNullOrWhiteSpace(
                 extension) ||
-            !AllowedImageExtensions
-                .Contains(
-                    extension))
+            !AllowedImageExtensions.Contains(
+                extension))
         {
             return BadRequest(new
             {
@@ -594,9 +608,8 @@ public class PublicationsController : ControllerBase
                 .ToLowerInvariant();
 
         if (
-            !AllowedImageContentTypes
-                .Contains(
-                    contentType))
+            !AllowedImageContentTypes.Contains(
+                contentType))
         {
             return BadRequest(new
             {
@@ -605,60 +618,80 @@ public class PublicationsController : ControllerBase
             });
         }
 
-        var webRootPath =
-            _environment.WebRootPath;
+        var objectPath =
+            $"publications/{publication.Id}/{Guid.NewGuid():N}{extension}";
 
-        if (
-            string.IsNullOrWhiteSpace(
-                webRootPath))
+        var previousImageUrl =
+            publication.ImageUrl;
+
+        string newImageUrl;
+
+        try
         {
-            webRootPath =
-                Path.Combine(
-                    _environment.ContentRootPath,
-                    "wwwroot"
+            newImageUrl =
+                await _storage.UploadAsync(
+                    image,
+                    objectPath,
+                    HttpContext.RequestAborted
                 );
         }
-
-        var uploadsDirectory =
-            Path.Combine(
-                webRootPath,
-                "uploads",
-                "publications"
-            );
-
-        Directory.CreateDirectory(
-            uploadsDirectory
-        );
-
-        var fileName =
-            $"{Guid.NewGuid()}{extension}";
-
-        var filePath =
-            Path.Combine(
-                uploadsDirectory,
-                fileName
-            );
-
-        await using (
-            var stream =
-                new FileStream(
-                    filePath,
-                    FileMode.Create))
+        catch (Exception ex)
         {
-            await image.CopyToAsync(
-                stream
+            Console.WriteLine(
+                $"ERROR SUPABASE STORAGE: {ex.Message}"
+            );
+
+            return StatusCode(
+                StatusCodes.Status502BadGateway,
+                new
+                {
+                    message =
+                        "No fue posible subir la imagen a Supabase Storage."
+                }
             );
         }
 
-        DeleteLocalImageIfExists(
-            publication.ImageUrl,
-            uploadsDirectory
-        );
-
         publication.ImageUrl =
-            $"{Request.Scheme}://{Request.Host}/uploads/publications/{fileName}";
+            newImageUrl;
 
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch
+        {
+            try
+            {
+                await _storage.DeleteByPublicUrlAsync(
+                    newImageUrl,
+                    HttpContext.RequestAborted
+                );
+            }
+            catch
+            {
+            }
+
+            throw;
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                previousImageUrl))
+        {
+            try
+            {
+                await _storage.DeleteByPublicUrlAsync(
+                    previousImageUrl,
+                    HttpContext.RequestAborted
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"ERROR ELIMINANDO IMAGEN ANTERIOR: {ex.Message}"
+                );
+            }
+        }
 
         return Ok(new
         {
@@ -696,33 +729,36 @@ public class PublicationsController : ControllerBase
             });
         }
 
-        var webRootPath =
-            _environment.WebRootPath;
-
         if (
-            string.IsNullOrWhiteSpace(
-                webRootPath))
+            !string.IsNullOrWhiteSpace(
+                publication.ImageUrl))
         {
-            webRootPath =
-                Path.Combine(
-                    _environment.ContentRootPath,
-                    "wwwroot"
+            try
+            {
+                await _storage.DeleteByPublicUrlAsync(
+                    publication.ImageUrl,
+                    HttpContext.RequestAborted
                 );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"ERROR ELIMINANDO IMAGEN: {ex.Message}"
+                );
+
+                return StatusCode(
+                    StatusCodes.Status502BadGateway,
+                    new
+                    {
+                        message =
+                            "No fue posible eliminar la imagen de Supabase Storage."
+                    }
+                );
+            }
         }
 
-        var uploadsDirectory =
-            Path.Combine(
-                webRootPath,
-                "uploads",
-                "publications"
-            );
-
-        DeleteLocalImageIfExists(
-            publication.ImageUrl,
-            uploadsDirectory
-        );
-
-        publication.ImageUrl = null;
+        publication.ImageUrl =
+            null;
 
         await _context.SaveChangesAsync();
 
@@ -777,64 +813,5 @@ public class PublicationsController : ControllerBase
                     string.Empty
             }
         };
-    }
-
-    private static void DeleteLocalImageIfExists(
-        string? imageUrl,
-        string uploadsDirectory)
-    {
-        if (
-            string.IsNullOrWhiteSpace(
-                imageUrl))
-        {
-            return;
-        }
-
-        if (
-            !Uri.TryCreate(
-                imageUrl,
-                UriKind.Absolute,
-                out var uri))
-        {
-            return;
-        }
-
-        const string expectedPath =
-            "/uploads/publications/";
-
-        if (
-            !uri.AbsolutePath.StartsWith(
-                expectedPath,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        var fileName =
-            Path.GetFileName(
-                uri.LocalPath
-            );
-
-        if (
-            string.IsNullOrWhiteSpace(
-                fileName))
-        {
-            return;
-        }
-
-        var filePath =
-            Path.Combine(
-                uploadsDirectory,
-                fileName
-            );
-
-        if (
-            System.IO.File.Exists(
-                filePath))
-        {
-            System.IO.File.Delete(
-                filePath
-            );
-        }
     }
 }
